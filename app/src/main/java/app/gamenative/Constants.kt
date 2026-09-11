@@ -39,5 +39,9 @@ object Constants {
         const val GITHUB_LINK = "https://github.com/utkarshdalal/GameNative"
         const val PRIVACY_LINK = "https://github.com/utkarshdalal/GameNative/tree/master/PrivacyPolicy"
         const val UPDATE_CHECK_URL = "https://api.gamenative.app/api/update-check"
+
+        // applicationId of the official GameNative build. Renamed builds (e.g. ".nr") install
+        // side by side with it, so features that act on "the" GameNative package must check this.
+        const val UPSTREAM_APPLICATION_ID = "app.gamenative"
     }
 }

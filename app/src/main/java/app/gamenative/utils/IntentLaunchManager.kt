@@ -20,7 +20,9 @@ object IntentLaunchManager {
 
     private const val EXTRA_GAME_SOURCE = "game_source"
     private const val EXTRA_CONTAINER_CONFIG = "container_config"
-    private const val ACTION_LAUNCH_GAME = "app.gamenative.LAUNCH_GAME"
+    // Public, stable action name (declared in AndroidManifest and used by external frontends).
+    // Intentionally NOT derived from applicationId so frontends keep working on renamed builds.
+    const val ACTION_LAUNCH_GAME = "app.gamenative.LAUNCH_GAME"
     private const val ACTION_VIEW = "android.intent.action.VIEW"
     private const val URI_SCHEME = "gamenative"
     private const val URI_HOST = "run"

@@ -17,7 +17,9 @@ public class DXVKHelper {
 
     public static void setEnvVars(Context context, KeyValueSet config, EnvVars envVars) {
         ImageFs imageFs = ImageFs.find(context);
-        envVars.put("DXVK_STATE_CACHE_PATH", "/data/data/app.gamenative/files/imagefs"+ImageFs.CACHE_PATH);
+        // Derive from the real ImageFs root instead of hardcoding /data/data/app.gamenative, so
+        // builds with an applicationIdSuffix (e.g. ".nr") write the cache into their own sandbox.
+        envVars.put("DXVK_STATE_CACHE_PATH", imageFs.cache_path);
         envVars.put("DXVK_LOG_LEVEL", "none");
 
         File rootDir = ImageFs.find(context).getRootDir();

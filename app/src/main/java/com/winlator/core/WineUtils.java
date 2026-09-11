@@ -36,6 +36,20 @@ public abstract class WineUtils {
         FileUtils.symlink(zTarget, dosdevicesPath + "/z:");
 
 
+        // Migrate the E: drive of containers created with the upstream hardcoded path
+        // (/data/data/app.gamenative/storage). In builds with an applicationIdSuffix that path is
+        // another app's sandbox, so the E: symlink would dangle. No-op for the upstream package.
+        if (!Container.INTERNAL_STORAGE_DRIVE_PATH.equals(Container.UPSTREAM_INTERNAL_STORAGE_DRIVE_PATH)) {
+            String drivesBefore = container.getDrives();
+            String legacyEntry = "E:" + Container.UPSTREAM_INTERNAL_STORAGE_DRIVE_PATH;
+            if (drivesBefore != null && drivesBefore.contains(legacyEntry)) {
+                String migrated = drivesBefore.replace(legacyEntry, "E:" + Container.INTERNAL_STORAGE_DRIVE_PATH);
+                container.setDrives(migrated);
+                container.saveData();
+                Log.d("WineUtils", "Migrated E: drive to " + Container.INTERNAL_STORAGE_DRIVE_PATH);
+            }
+        }
+
         // Auto-fix containers missing D: and E: drives
         String currentDrives = container.getDrives();
         if (!currentDrives.contains("D:") || !currentDrives.contains("E:")) {
@@ -45,7 +59,7 @@ public abstract class WineUtils {
                 missingDrives += "D:" + android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
             }
             if (!currentDrives.contains("E:")) {
-                missingDrives += "E:/data/data/app.gamenative/storage";
+                missingDrives += "E:" + Container.INTERNAL_STORAGE_DRIVE_PATH;
             }
             String updatedDrives = missingDrives + currentDrives;
             container.setDrives(updatedDrives);
@@ -57,7 +71,7 @@ public abstract class WineUtils {
         for (String[] drive : container.drivesIterator()) {
             File linkTarget = new File(drive[1]);
             String path = linkTarget.getAbsolutePath();
-            if (!linkTarget.isDirectory() && path.endsWith("/app.gamenative/storage")) {
+            if (!linkTarget.isDirectory() && path.endsWith("/" + app.gamenative.BuildConfig.APPLICATION_ID + "/storage")) {
                 linkTarget.mkdirs();
                 FileUtils.chmod(linkTarget, 0771);
             }

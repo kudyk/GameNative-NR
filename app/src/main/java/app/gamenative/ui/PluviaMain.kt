@@ -474,6 +474,9 @@ fun PluviaMain(
     // Check for updates on app start
     LaunchedEffect(Unit) {
         if (BuildConfig.MODERN_ANDROID || BuildConfig.XR_BUILD) return@LaunchedEffect
+        // The update server ships the official APK (app.gamenative). On a renamed build installing
+        // it would install/update the official app next to this one instead of updating this build.
+        if (BuildConfig.APPLICATION_ID != Constants.Misc.UPSTREAM_APPLICATION_ID) return@LaunchedEffect
         val checkedUpdateInfo = UpdateChecker.checkForUpdate(context)
         if (checkedUpdateInfo != null) {
             val appVersionCode = BuildConfig.VERSION_CODE
