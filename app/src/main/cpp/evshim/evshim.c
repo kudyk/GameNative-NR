@@ -83,7 +83,7 @@ static void build_gamepad_dir(char *out, size_t size)
 
     // fallback
     if (!base || !*base) {
-        base = "/data/data/app.gamenative/files";
+        base = "/tmp";
     }
 
     snprintf(out, size, "%s/gamepad_shm", base);

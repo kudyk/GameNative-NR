@@ -3,6 +3,7 @@ package app.gamenative
 import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.StrictMode
+import android.system.Os
 import android.util.DisplayMetrics
 import android.view.Display
 import androidx.compose.runtime.getValue
@@ -62,6 +63,13 @@ class PluviaApp : SplitCompatApplication() {
         instance = this
 
         preloadSystemLibraries()
+
+        // Set the base path for evshim to support side-by-side installations
+        try {
+            Os.setenv("EVSHIM_BASE_PATH", filesDir.absolutePath, true)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to set EVSHIM_BASE_PATH")
+        }
 
         // Allows to find resource streams not closed within GameNative and JavaSteam
         if (BuildConfig.DEBUG) {
