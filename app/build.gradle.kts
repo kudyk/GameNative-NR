@@ -81,6 +81,7 @@ android {
             mapOf(
                 "icon" to iconValue,
                 "roundIcon" to iconRoundValue,
+                "appLabel" to "GameNative",
             ),
         )
 
@@ -163,12 +164,16 @@ android {
 
     buildTypes {
         debug {
+            applicationIdSuffix = ".nr"
+            manifestPlaceholders["appLabel"] = "GameNative-NR"
             isDebuggable = true
             isMinifyEnabled = false
             isShrinkResources = false
             signingConfig = signingConfigs.getByName("debug")
         }
         release {
+            applicationIdSuffix = ".nr"
+            manifestPlaceholders["appLabel"] = "GameNative-NR"
             isMinifyEnabled = true
             isShrinkResources = true
             signingConfig = signingConfigs.getByName("debug")
