@@ -2456,6 +2456,8 @@
 
     <!-- Radial Menu -->
     <string name="radial_menu">Radial Menu</string>
+    <string name="input_throttle_toggle">Input throttle</string>
+    <string name="input_poll_rate">Poll rate</string>
     <string name="radial_menu_settings_title">Radial Menu</string>
     <string name="radial_menu_cancel">Cancel</string>
     <string name="radial_menu_slot_count">Slots</string>

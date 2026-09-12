@@ -44,8 +44,11 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 
@@ -66,6 +69,7 @@ public class WinHandler {
     private volatile int currentControllerId;
     private byte dinputMapperType;
     private final List<Integer> gamepadClients;
+    private final Map<Integer, byte[]> lastSentUdpDataByPort = new HashMap<>();
     private boolean initReceived;
     private InetAddress localhost;
     private OnGetProcessInfoListener onGetProcessInfoListener;
@@ -129,6 +133,13 @@ public class WinHandler {
         return "id=" + device.getId()
                 + " name=\"" + device.getName() + "\""
                 + " descriptor=\"" + device.getDescriptor() + "\"";
+    }
+
+    private static class GamepadStateUpdateTask implements Runnable {
+        final int port;
+        private final Runnable action;
+        GamepadStateUpdateTask(int port, Runnable action) { this.port = port; this.action = action; }
+        @Override public void run() { action.run(); }
     }
 
     public enum PreferredInputApi {
@@ -482,6 +493,11 @@ public class WinHandler {
 
     private void addAction(Runnable action) {
         synchronized (this.actions) {
+            // Replace any existing pending gamepad state update for the SAME PORT with the latest one
+            if (action instanceof GamepadStateUpdateTask) {
+                final int port = ((GamepadStateUpdateTask) action).port;
+                this.actions.removeIf(r -> r instanceof GamepadStateUpdateTask && ((GamepadStateUpdateTask) r).port == port);
+            }
             this.actions.add(action);
             this.actions.notify();
         }
@@ -500,15 +516,19 @@ public class WinHandler {
     private void startSendThread() {
         Executors.newSingleThreadExecutor().execute(() -> {
             while (this.running) {
+                Runnable action;
                 synchronized (this.actions) {
-                    while (this.initReceived && !this.actions.isEmpty()) {
-                        this.actions.poll().run();
+                    while (this.running && (!this.initReceived || this.actions.isEmpty())) {
+                        try {
+                            this.actions.wait();
+                        } catch (InterruptedException e) {
+                        }
                     }
-                    try {
-                        this.actions.wait();
-                    } catch (InterruptedException e) {
-                    }
+                    if (!this.running) break;
+                    action = this.actions.poll();
                 }
+                // Outside the lock: addAction() callers (the main thread) must not wait on socket.send().
+                action.run();
             }
         });
     }
@@ -702,6 +722,7 @@ public class WinHandler {
                 this.currentController = null;
                 this.gamepadClients.clear();
                 this.xinputProcesses.clear();
+                this.lastSentUdpDataByPort.clear();
                 return;
             case RequestCodes.CURSOR_POS_FEEDBACK:
                 short x = this.receiveData.getShort();
@@ -945,23 +966,46 @@ public class WinHandler {
         final ControlsProfile profile = inputControlsView != null ? inputControlsView.getProfile() : null;
         final boolean useVirtualGamepad = isVirtualGamepadActive();
         final boolean enabled = this.currentController != null || useVirtualGamepad;
+
+        // Resolve now: RELEASE_GAMEPAD may null currentController before the send thread runs.
+        final GamepadState sourceState = enabled
+                ? (useVirtualGamepad ? profile.getGamepadState() : this.currentController.state)
+                : null;
+        final int deviceId = enabled
+                ? (!useVirtualGamepad ? this.currentController.getDeviceId() : profile.id)
+                : 0;
+
         Iterator<Integer> it = this.gamepadClients.iterator();
         while (it.hasNext()) {
             final int port = it.next().intValue();
-            addAction(() -> {
+
+            addAction(new GamepadStateUpdateTask(port, () -> {
                 this.sendData.rewind();
                 sendData.put(RequestCodes.GET_GAMEPAD_STATE);
                 sendData.put((byte)(enabled ? 1 : 0));
                 if (enabled) {
-                    this.sendData.putInt(!useVirtualGamepad ? this.currentController.getDeviceId() : inputControlsView.getProfile().id);
-                    if (useVirtualGamepad) {
-                        inputControlsView.getProfile().getGamepadState().writeTo(sendData);
-                    } else {
-                        this.currentController.state.writeTo(this.sendData);
+                    this.sendData.putInt(deviceId);
+                    sourceState.writeTo(this.sendData);
+                }
+                // Only send if content actually changed since the last packet on THIS port
+                int size = this.sendData.position();
+                byte[] currentData = this.sendData.array();
+                byte[] lastSentData = lastSentUdpDataByPort.get(port);
+                boolean changed = lastSentData == null || lastSentData.length != size;
+                if (!changed) {
+                    for (int i = 0; i < size; i++) {
+                        if (currentData[i] != lastSentData[i]) {
+                            changed = true;
+                            break;
+                        }
                     }
                 }
-                sendPacket(port);
-            });
+
+                if (changed) {
+                    lastSentUdpDataByPort.put(port, Arrays.copyOf(currentData, size));
+                    sendPacket(port);
+                }
+            }));
         }
     }
 

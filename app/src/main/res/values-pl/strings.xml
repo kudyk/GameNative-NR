@@ -2417,6 +2417,8 @@
     <string name="steam_invite_online">Online</string>
     <string name="steam_invite_offline">Offline</string>
     <string name="radial_menu">Menu radialne</string>
+    <string name="input_throttle_toggle">Dławienie wejścia</string>
+    <string name="input_poll_rate">Częstotliwość odpytywania</string>
     <string name="radial_menu_settings_title">Menu radialne</string>
     <string name="radial_menu_cancel">Anuluj</string>
     <string name="radial_menu_slot_count">Sloty</string>

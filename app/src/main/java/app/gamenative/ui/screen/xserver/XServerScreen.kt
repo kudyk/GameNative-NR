@@ -636,6 +636,8 @@ fun XServerScreen(
     var detectedMaxRefreshRateHz by remember { mutableIntStateOf(detectMaxRefreshRateHz(context, null)) }
     var fpsLimiterEnabled by rememberSaveable(container.id) { mutableStateOf(initialFpsLimiterEnabled(container)) }
     var fpsLimiterTarget by rememberSaveable(container.id) { mutableIntStateOf(initialFpsLimiterTarget(container)) }
+    var inputThrottlingEnabled by rememberSaveable(container.id) { mutableStateOf(PrefManager.inputThrottlingEnabled) }
+    var inputPollRateHz by rememberSaveable(container.id) { mutableIntStateOf(PrefManager.inputPollRateHz) }
 
     val gyroOverlaySuppressed = showQuickMenu || keepPausedForEditor || showElementEditor ||
         showPhysicalControllerDialog || showTouchGestureDialog || showShooterModeDialog ||
@@ -784,6 +786,19 @@ fun XServerScreen(
         }
     }
 
+    fun applyInputPollRateHz(hz: Int) {
+        val sanitized = hz.coerceIn(15, 240)
+        inputPollRateHz = sanitized
+        PrefManager.inputPollRateHz = sanitized
+        physicalControllerHandler?.setInputPollRateHz(sanitized)
+    }
+
+    fun applyInputThrottlingEnabled(enabled: Boolean) {
+        inputThrottlingEnabled = enabled
+        PrefManager.inputThrottlingEnabled = enabled
+        physicalControllerHandler?.setInputThrottlingEnabled(enabled)
+    }
+
     fun applyLsfgMultiplier(mult: Int) {
         lsfgMultiplier = LsfgQuickMenuHelper.sanitizeMultiplier(mult)
         applyLsfgSettings()
@@ -924,9 +939,11 @@ fun XServerScreen(
     fun clearOverlayPauseState() {
         PluviaApp.isOverlayPaused = false
         PluviaApp.inputControlsView?.setGyroGameplayActive(true)
+        physicalControllerHandler?.onOverlayResumed()
     }
 
     fun pauseForOverlayIfAllowed() {
+        physicalControllerHandler?.releaseAllActiveInput()
         if (neverSuspend) {
             Timber.d("Skipping overlay suspend due to suspend policy=never")
             return
@@ -1047,16 +1064,23 @@ fun XServerScreen(
         }
     }
 
+    // Gamepad motion calls this on every event while capture is off: keep one request in flight.
+    // Posted on the main Handler, not the view, so a detached view can't strand the flag.
+    val pointerCaptureHandler = remember { Handler(Looper.getMainLooper()) }
+    val pointerCaptureRequestPending = remember { AtomicBoolean(false) }
     val tryCapturePointer: () -> Boolean = {
         if (!showElementEditor && !keepPausedForEditor && !showQuickMenu && !isEditMode &&
             !container.isTouchscreenMode) {
-            PluviaApp.touchpadView?.postDelayed({
-                val view = PluviaApp.touchpadView
-                if (view != null) {
-                    view.requestFocus()
-                    view.requestPointerCapture()
-                }
-            }, 100)
+            if (pointerCaptureRequestPending.compareAndSet(false, true)) {
+                pointerCaptureHandler.postDelayed({
+                    pointerCaptureRequestPending.set(false)
+                    val view = PluviaApp.touchpadView
+                    if (view != null) {
+                        view.requestFocus()
+                        view.requestPointerCapture()
+                    }
+                }, 100)
+            }
             true
         } else {
             false
@@ -2568,6 +2592,8 @@ fun XServerScreen(
                     PluviaApp.radialMenuCoordinator?.setProfile(targetProfile)
 
                     val radialMenuCoordinator = PluviaApp.radialMenuCoordinator
+                    // Defensive: a second run would otherwise orphan the old handler's held inputs.
+                    physicalControllerHandler?.cleanup()
                     physicalControllerHandler = PhysicalControllerHandler(
                         targetProfile,
                         xServerView.getxServer(),
@@ -2586,6 +2612,8 @@ fun XServerScreen(
                             updatePhysicalStickAndGetMixedValue(binding, isDown, offset, sourceKeyCode)
                         },
                     )
+                    physicalControllerHandler?.setInputThrottlingEnabled(inputThrottlingEnabled)
+                    physicalControllerHandler?.setInputPollRateHz(inputPollRateHz)
                     radialMenuCoordinator?.bindPhysicalControllerHandler(physicalControllerHandler)
 
                     // Store profile for auto-show logic
@@ -2926,9 +2954,13 @@ fun XServerScreen(
                 fpsLimiterEnabled = fpsLimiterEnabled,
                 fpsLimiterTarget = fpsLimiterTarget,
                 fpsLimiterMax = detectedMaxRefreshRateHz,
+                inputThrottlingEnabled = inputThrottlingEnabled,
+                inputPollRateHz = inputPollRateHz,
                 onHudConfigChanged = ::applyPerformanceHudConfig,
                 onFpsLimiterEnabledChanged = ::applyFpsLimiterEnabled,
                 onFpsLimiterChanged = ::applyFpsLimiterTarget,
+                onInputThrottlingEnabledChanged = ::applyInputThrottlingEnabled,
+                onInputPollRateHzChanged = ::applyInputPollRateHz,
             ),
             hasPhysicalController = hasPhysicalController,
             isTouchscreenModeActive = isTouchscreenModeActive,

@@ -2413,6 +2413,8 @@
     <string name="steam_invite_online">У мережі</string>
     <string name="steam_invite_offline">Не в мережі</string>
     <string name="radial_menu">Радіальне меню</string>
+    <string name="input_throttle_toggle">Тротлінг інпуту</string>
+    <string name="input_poll_rate">Частота опитування</string>
     <string name="radial_menu_settings_title">Радіальне меню</string>
     <string name="radial_menu_cancel">Скасувати</string>
     <string name="radial_menu_slot_count">Слоти</string>

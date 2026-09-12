@@ -8,6 +8,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.concurrent.ConcurrentHashMap;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -178,15 +179,16 @@ public class ExternalController {
         return getDeviceId() + " | " + getName();
     }
 
-    private void processJoystickInput(MotionEvent event, int historyPos) {
+    private void processJoystickInput(MotionEvent event, InputDevice device, boolean isJoyCon) {
         boolean z = false;
-        this.state.thumbLX = updateAxis(event, MotionEvent.AXIS_X, historyPos, this.state.thumbLX);
-        this.state.thumbLY = updateAxis(event, MotionEvent.AXIS_Y, historyPos, this.state.thumbLY);
-        this.state.thumbRX = updateAxis(event, MotionEvent.AXIS_Z, historyPos, this.state.thumbRX);
-        this.state.thumbRY = updateAxis(event, MotionEvent.AXIS_RZ, historyPos, this.state.thumbRY);
-        if (historyPos == -1 && !JoyConSupport.isJoyCon(event.getDevice())) {
-            float axisX = getCenteredAxis(event, MotionEvent.AXIS_HAT_X, historyPos);
-            float axisY = getCenteredAxis(event, MotionEvent.AXIS_HAT_Y, historyPos);
+        int source = event.getSource();
+        this.state.thumbLX = updateAxis(event, device, source, MotionEvent.AXIS_X, this.state.thumbLX);
+        this.state.thumbLY = updateAxis(event, device, source, MotionEvent.AXIS_Y, this.state.thumbLY);
+        this.state.thumbRX = updateAxis(event, device, source, MotionEvent.AXIS_Z, this.state.thumbRX);
+        this.state.thumbRY = updateAxis(event, device, source, MotionEvent.AXIS_RZ, this.state.thumbRY);
+        if (!isJoyCon) {
+            float axisX = getCenteredAxis(event, MotionEvent.AXIS_HAT_X, -1);
+            float axisY = getCenteredAxis(event, MotionEvent.AXIS_HAT_Y, -1);
             GamepadState gamepadState = this.state;
             gamepadState.dpad[0] = axisY == -1.0f;
             GamepadState gamepadState2 = this.state;
@@ -202,10 +204,14 @@ public class ExternalController {
         }
     }
 
-    private static float updateAxis(MotionEvent event, int axis, int historyPos, float retained) {
-        InputDevice device = event.getDevice();
-        boolean reported = device != null && device.getMotionRange(axis, event.getSource()) != null;
-        return JoyConSupport.axisValue(reported, retained, getCenteredAxis(event, axis, historyPos));
+    private static float updateAxis(MotionEvent event, InputDevice device, int source, int axis, float retained) {
+        InputDevice.MotionRange range = device != null ? device.getMotionRange(axis, source) : null;
+        float value = 0.0f;
+        if (range != null) {
+            float raw = event.getAxisValue(axis);
+            if (Math.abs(raw) > range.getFlat()) value = raw;
+        }
+        return JoyConSupport.axisValue(range != null, retained, value);
     }
 
     private void processTriggerButton(MotionEvent event) {
@@ -255,13 +261,15 @@ public class ExternalController {
 
     public boolean updateStateFromMotionEvent(MotionEvent event) {
         if (isJoystickDevice(event)) {
-            if (triggerType == TRIGGER_IS_AXIS && !JoyConSupport.isJoyCon(event.getDevice()))
+            InputDevice device = event.getDevice();
+            boolean isJoyCon = JoyConSupport.isJoyCon(device);
+            if (triggerType == TRIGGER_IS_AXIS && !isJoyCon)
                 processTriggerButton(event);
             else if (triggerType == TRIGGER_IS_BUTTON && isXboxController())
                 processXboxTriggerButton(event);
-            int historySize = event.getHistorySize();
-            for (int i = 0; i < historySize; i++) processJoystickInput(event, i);
-            processJoystickInput(event, -1);
+            // Android batches a frame's samples into one event; only the newest one survives in the
+            // state anyway, so the historical samples are not replayed.
+            processJoystickInput(event, device, isJoyCon);
             return true;
         }
         return false;
@@ -366,8 +374,30 @@ public class ExternalController {
         return null;
     }
 
+    // InputDevice.hasKeys() is a binder call and this runs on every input event. InputManager hands
+    // out a new InputDevice instance when a device changes, so the instance is the cache key's guard.
+    private static final class GameControllerCheck {
+        final InputDevice device;
+        final boolean isGameController;
+
+        GameControllerCheck(InputDevice device, boolean isGameController) {
+            this.device = device;
+            this.isGameController = isGameController;
+        }
+    }
+
+    private static final ConcurrentHashMap<Integer, GameControllerCheck> gameControllerChecks = new ConcurrentHashMap<>();
+
     public static boolean isGameController(InputDevice device) {
         if (device == null) return false;
+        GameControllerCheck cached = gameControllerChecks.get(device.getId());
+        if (cached != null && cached.device == device) return cached.isGameController;
+        boolean result = computeIsGameController(device);
+        gameControllerChecks.put(device.getId(), new GameControllerCheck(device, result));
+        return result;
+    }
+
+    private static boolean computeIsGameController(InputDevice device) {
         if (device.isVirtual()) return false;
 
         boolean isGamepad = device.supportsSource(InputDevice.SOURCE_GAMEPAD);

@@ -2364,6 +2364,8 @@
     <string name="steam_invite_online">オンライン</string>
     <string name="steam_invite_offline">オフライン</string>
     <string name="radial_menu">ラジアルメニュー</string>
+    <string name="input_throttle_toggle">入力スロットル</string>
+    <string name="input_poll_rate">ポーリングレート</string>
     <string name="radial_menu_settings_title">ラジアルメニュー</string>
     <string name="radial_menu_cancel">キャンセル</string>
     <string name="radial_menu_slot_count">スロット</string>

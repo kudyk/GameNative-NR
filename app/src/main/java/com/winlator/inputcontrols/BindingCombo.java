@@ -191,6 +191,13 @@ public final class BindingCombo {
         return false;
     }
 
+    /** Sequences never count: they are discrete macros even with an analog step. */
+    public boolean hasAnalog() {
+        if (isSequence()) return false;
+        for (Binding binding : bindings) if (binding.isAnalog()) return true;
+        return false;
+    }
+
     public boolean isGamepadOnly() {
         if (bindings.isEmpty()) return false;
         for (Binding binding : bindings) if (!binding.isGamepad()) return false;

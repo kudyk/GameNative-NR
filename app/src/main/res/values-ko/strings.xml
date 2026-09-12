@@ -2405,6 +2405,8 @@
     <string name="steam_invite_online">온라인</string>
     <string name="steam_invite_offline">오프라인</string>
     <string name="radial_menu">방사형 메뉴</string>
+    <string name="input_throttle_toggle">입력 스ロット링</string>
+    <string name="input_poll_rate">폴링 속도</string>
     <string name="radial_menu_settings_title">방사형 메뉴</string>
     <string name="radial_menu_cancel">취소</string>
     <string name="radial_menu_slot_count">슬롯</string>
