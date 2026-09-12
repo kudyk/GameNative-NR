@@ -1179,6 +1179,10 @@ https://gamenative.app
     <string name="settings_region_default">По умолчанию</string>
     <string name="settings_save_logcat_subtitle">Сохраняет снимок logcat только для PID этого приложения</string>
     <string name="settings_save_logcat_title">Сохранить logcat</string>
+    <string name="settings_debug_logging_title">Включить логирование</string>
+    <string name="settings_debug_logging_subtitle">Глобальный переключатель (выключение ускоряет работу)</string>
+    <string name="settings_debug_verbose_logging_title">Подробные логи</string>
+    <string name="settings_debug_verbose_logging_subtitle">Включить детальные отчеты (только для отладки)</string>
     <string name="settings_achievement_show_notification">Показывать уведомления о достижениях</string>
     <string name="settings_achievement_play_sound">Воспроизводить звук достижений</string>
     <string name="settings_saving_restarting">Сохранение настроек и перезагрузка…</string>

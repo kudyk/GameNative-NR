@@ -9,9 +9,11 @@ import timber.log.Timber
  */
 class ReleaseTree : Timber.Tree() {
 
-    override fun isLoggable(tag: String?, priority: Int): Boolean = priority >= Log.INFO // Ignore Verbose and Debug logs.
+    override fun isLoggable(tag: String?, priority: Int): Boolean = priority >= Log.INFO
 
     override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+        // Logging is disabled globally by not planting any tree in PluviaApp.updateTimberTrees()
+        // but we still want to respect the priority here.
         if (!isLoggable(tag, priority)) {
             return
         }

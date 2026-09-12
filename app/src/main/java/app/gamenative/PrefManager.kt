@@ -66,6 +66,11 @@ object PrefManager {
 
     private lateinit var dataStore: DataStore<Preferences>
 
+    @Volatile
+    var loggingEnabledCache: Boolean = true
+    @Volatile
+    var verboseLoggingEnabledCache: Boolean = false
+
     fun init(context: Context) {
         dataStore = context.datastore
 
@@ -134,10 +139,14 @@ object PrefManager {
     fun setFloat(key: String, value: Float): Unit =
         setPref(floatPreferencesKey(key), value)
 
+    suspend fun <T> getPrefAsync(key: Preferences.Key<T>, defaultValue: T): T {
+        return dataStore.data.first()[key] ?: defaultValue
+    }
+
     @Suppress("SameParameterValue")
     private fun <T> getPref(key: Preferences.Key<T>, defaultValue: T): T = runBlocking {
         try {
-            dataStore.data.first()[key] ?: defaultValue
+            getPrefAsync(key, defaultValue)
         } catch (e: IOException) {
             Timber.w(e, "Failed to read preference ${key.name}, using default")
             defaultValue
@@ -1718,4 +1727,25 @@ object PrefManager {
     var powerControlDefaultEnabled: Boolean
         get() = getPref(POWER_CONTROL_DEFAULT_ENABLED, DeviceGate.isDeviceSupported())
         set(value) { setPref(POWER_CONTROL_DEFAULT_ENABLED, value) }
+
+    suspend fun updateLoggingCache() {
+        loggingEnabledCache = getPrefAsync(LOGGING_ENABLED, true)
+        verboseLoggingEnabledCache = getPrefAsync(VERBOSE_LOGGING_ENABLED, false)
+    }
+
+    private val VERBOSE_LOGGING_ENABLED = booleanPreferencesKey("verbose_logging_enabled")
+    var verboseLoggingEnabled: Boolean
+        get() = getPref(VERBOSE_LOGGING_ENABLED, false)
+        set(value) {
+            verboseLoggingEnabledCache = value
+            setPref(VERBOSE_LOGGING_ENABLED, value)
+        }
+
+    private val LOGGING_ENABLED = booleanPreferencesKey("logging_enabled")
+    var loggingEnabled: Boolean
+        get() = getPref(LOGGING_ENABLED, true)
+        set(value) {
+            loggingEnabledCache = value
+            setPref(LOGGING_ENABLED, value)
+        }
 }

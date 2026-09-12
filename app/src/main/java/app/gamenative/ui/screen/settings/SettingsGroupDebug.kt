@@ -39,6 +39,7 @@ import java.io.File
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import app.gamenative.ui.component.dialog.WineDebugChannelsDialog
+import app.gamenative.PluviaApp
 
 @Suppress("UnnecessaryOptInAnnotation") // ExperimentalFoundationApi
 @OptIn(ExperimentalCoilApi::class, ExperimentalFoundationApi::class)
@@ -87,6 +88,12 @@ fun SettingsGroupDebug() {
     var enableBox86Logs by rememberSaveable { mutableStateOf(
         if (isPreview) false else WinlatorPrefManager.getBoolean("enable_box86_64_logs", false)
     ) }
+    var enableVerboseLogging by rememberSaveable {
+        mutableStateOf(if (isPreview) false else PrefManager.verboseLoggingEnabled)
+    }
+    var enableLogging by rememberSaveable {
+        mutableStateOf(if (isPreview) true else PrefManager.loggingEnabled)
+    }
     var latestCrashFile: File? by rememberSaveable { mutableStateOf(null) }
     LaunchedEffect(Unit) {
         val crashDir = File(context.getExternalFilesDir(null), "crash_logs")
@@ -197,6 +204,33 @@ fun SettingsGroupDebug() {
                 )
             },
             onClick = { showChannelsDialog = true },
+        )
+        SettingsSwitch(
+            colors = settingsTileColorsAlt(),
+            state = enableLogging,
+            title = { Text(text = stringResource(R.string.settings_debug_logging_title)) },
+            subtitle = { Text(text = stringResource(R.string.settings_debug_logging_subtitle)) },
+            onCheckedChange = {
+                enableLogging = it
+                if (!isPreview) {
+                    PrefManager.loggingEnabled = it
+                    PluviaApp.updateTimberTrees()
+                }
+            },
+        )
+        SettingsSwitch(
+            colors = settingsTileColorsAlt(),
+            state = enableVerboseLogging,
+            enabled = enableLogging,
+            title = { Text(text = stringResource(R.string.settings_debug_verbose_logging_title)) },
+            subtitle = { Text(text = stringResource(R.string.settings_debug_verbose_logging_subtitle)) },
+            onCheckedChange = {
+                enableVerboseLogging = it
+                if (!isPreview) {
+                    PrefManager.verboseLoggingEnabled = it
+                    PluviaApp.updateTimberTrees()
+                }
+            },
         )
         SettingsSwitch(
             colors = settingsTileColorsAlt(),

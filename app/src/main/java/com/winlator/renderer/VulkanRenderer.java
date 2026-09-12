@@ -22,6 +22,8 @@ import com.winlator.xserver.XServer;
 
 import java.util.ArrayList;
 
+import timber.log.Timber;
+
 public class VulkanRenderer implements WindowManager.OnWindowModificationListener,
                                        Pointer.OnPointerMotionListener,
                                        XServerRenderer {
@@ -785,8 +787,7 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
         this.driverPath = driverPath;
         this.driverLibraryName = libraryName;
         this.nativeLibDir = nativeLibDir;
-        android.util.Log.d("Winlator_Renderer",
-            "setDriverInfo: path=" + driverPath + " lib=" + libraryName);
+        Timber.tag("Winlator_Renderer").d("setDriverInfo: path=%s lib=%s", driverPath, libraryName);
     }
 
     public void setVerboseLog(boolean v) {

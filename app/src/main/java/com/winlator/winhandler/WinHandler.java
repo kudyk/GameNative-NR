@@ -181,7 +181,7 @@ public class WinHandler {
     }
 
     private void refreshControllerMappings(boolean clearDisconnectedSlots) {
-        Log.d(TAG, "Refreshing controller assignments from settings...");
+        Timber.tag(TAG).d("Refreshing controller assignments from settings...");
         currentController = null;
         for (int i = 0; i < extraControllers.length; i++) {
             extraControllers[i] = null;
@@ -717,7 +717,7 @@ public class WinHandler {
 
     public void setCurrentController(int deviceId) {
         if (currentControllerId != deviceId) {
-            Log.d(TAG, "setCurrentController deviceId=" + deviceId);
+            Timber.tag(TAG).d("setCurrentController deviceId=" + deviceId);
             this.currentControllerId = deviceId;
         }
     }
@@ -971,7 +971,7 @@ public class WinHandler {
         if (slot >= 0) {
             ExternalController controller = getControllerFromSlot(slot);
             if (!isEventFromController(controller, event.getDeviceId())) {
-                Log.d(TAG, "Motion event refresh for deviceId=" + event.getDeviceId()
+                Timber.tag(TAG).d("Motion event refresh for deviceId=" + event.getDeviceId()
                         + " slot=" + slot
                         + " controller=" + (controller != null ? controller.getDeviceId() : -1));
                 refreshControllerMappings();
@@ -1030,7 +1030,7 @@ public class WinHandler {
         if (slot >= 0) {
             ExternalController controller = getControllerFromSlot(slot);
             if (!isEventFromController(controller, event.getDeviceId())) {
-                Log.d(TAG, "Key event refresh for deviceId=" + event.getDeviceId()
+                Timber.tag(TAG).d("Key event refresh for deviceId=" + event.getDeviceId()
                         + " slot=" + slot
                         + " controller=" + (controller != null ? controller.getDeviceId() : -1));
                 refreshControllerMappings();
@@ -1039,7 +1039,7 @@ public class WinHandler {
             if (isEventFromController(controller, event.getDeviceId())) {
                 if (event.getRepeatCount() > 0) return true;
                 handled = controller.updateStateFromKeyEvent(event); // or motion variant
-                Log.d(TAG, "Key routed deviceId=" + event.getDeviceId()
+                Timber.tag(TAG).d("Key routed deviceId=" + event.getDeviceId()
                         + " keyCode=" + event.getKeyCode()
                         + " action=" + event.getAction()
                         + " -> P" + (slot + 1)

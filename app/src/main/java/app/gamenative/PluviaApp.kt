@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.StrictMode
 import android.system.Os
 import android.util.DisplayMetrics
+import android.util.Log
 import android.view.Display
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +40,7 @@ import com.winlator.inputcontrols.InputControlsManager
 import com.winlator.widget.InputControlsView
 import com.winlator.widget.TouchpadView
 import com.winlator.widget.XServerRendererView
+import com.winlator.xconnector.XConnectorEpollNative
 import com.winlator.xenvironment.XEnvironment
 import timber.log.Timber
 import dagger.hilt.android.HiltAndroidApp
@@ -47,6 +49,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 typealias NavChangedListener = NavController.OnDestinationChangedListener
 
@@ -62,13 +65,29 @@ class PluviaApp : SplitCompatApplication() {
         super.onCreate()
         instance = this
 
+        PrefManager.init(this)
+
         preloadSystemLibraries()
 
         // Set the base path for evshim to support side-by-side installations
         try {
             Os.setenv("EVSHIM_BASE_PATH", filesDir.absolutePath, true)
         } catch (e: Exception) {
-            Timber.e(e, "Failed to set EVSHIM_BASE_PATH")
+            // Use standard log as Timber might not be ready yet
+            Log.e("PluviaApp", "Failed to set EVSHIM_BASE_PATH", e)
+        }
+
+        // Initialize logging with default values first, then update once preferences are loaded
+        updateTimberTrees()
+
+        appScope.launch {
+            // Load actual logging preferences from DataStore
+            PrefManager.updateLoggingCache()
+
+            // Switch to Main thread to update Timber and Native logging state
+            withContext(Dispatchers.Main) {
+                updateTimberTrees()
+            }
         }
 
         // Allows to find resource streams not closed within GameNative and JavaSteam
@@ -79,10 +98,6 @@ class PluviaApp : SplitCompatApplication() {
                     .penaltyLog()
                     .build(),
             )
-
-            Timber.plant(Timber.DebugTree())
-        } else {
-            Timber.plant(ReleaseTree())
         }
 
         NetworkMonitor.init(this)
@@ -90,8 +105,6 @@ class PluviaApp : SplitCompatApplication() {
         // Init our custom crash handler.
         CrashHandler.initialize(this)
 
-        // Init our datastore preferences.
-        PrefManager.init(this)
         NexusAuthManager.initialize(this)
         FrontendSyncManager.init(this)
 
@@ -302,6 +315,21 @@ class PluviaApp : SplitCompatApplication() {
         fun isNeverSuspendMode(): Boolean = activeSuspendPolicy.equals(Container.SUSPEND_POLICY_NEVER, ignoreCase = true)
 
         fun isManualSuspendMode(): Boolean = activeSuspendPolicy.equals(Container.SUSPEND_POLICY_MANUAL, ignoreCase = true)
+
+        fun updateTimberTrees() {
+            Timber.uprootAll()
+
+            val enabled = PrefManager.loggingEnabledCache
+            runCatching { XConnectorEpollNative.setLoggingEnabled(enabled) }
+
+            if (!enabled) return
+
+            if (BuildConfig.DEBUG || PrefManager.verboseLoggingEnabledCache) {
+                Timber.plant(Timber.DebugTree())
+            } else {
+                Timber.plant(ReleaseTree())
+            }
+        }
 
         fun getDefaultScreenSize(): String {
             cachedDefaultScreenSize?.let { return it }
