@@ -105,6 +105,7 @@ import app.gamenative.ui.component.dialog.GyroSettingsDialog
 import app.gamenative.ui.component.quickMenus.PowerControlQuickMenuTab
 import app.gamenative.ui.data.PerformanceHudConfig
 import app.gamenative.ui.data.PerformanceHudSize
+import app.gamenative.ui.screen.xr.ImmersiveSessionHooks
 import app.gamenative.ui.theme.PluviaTheme
 import app.gamenative.ui.util.adaptivePanelWidth
 import app.gamenative.utils.MathUtils.normalizedProgress
@@ -349,9 +350,13 @@ class PerformanceQuickMenuState(
     val fpsLimiterEnabled: Boolean = true,
     val fpsLimiterTarget: Int = 60,
     val fpsLimiterMax: Int = 60,
+    val inputThrottlingEnabled: Boolean = true,
+    val inputPollRateHz: Int = 60,
     val onHudConfigChanged: (PerformanceHudConfig) -> Unit = {},
     val onFpsLimiterEnabledChanged: (Boolean) -> Unit = {},
     val onFpsLimiterChanged: (Int) -> Unit = {},
+    val onInputThrottlingEnabledChanged: (Boolean) -> Unit = {},
+    val onInputPollRateHzChanged: (Int) -> Unit = {},
 )
 
 /** LSFG hot-reload state/callbacks as one QuickMenu parameter instead of seven — same
@@ -389,7 +394,7 @@ fun QuickMenu(
     onAnimationComplete: (Boolean) -> Unit = {},
     /** Lets the menu open itself when the running game asks for its Steam invite dialog. */
     onRequestOpen: () -> Unit = {},
-    immersiveHooks: app.gamenative.ui.screen.xr.ImmersiveSessionHooks? = null,
+    immersiveHooks: ImmersiveSessionHooks? = null,
     modifier: Modifier = Modifier,
 ) {
     val immersiveControls = immersiveHooks?.controls
@@ -398,9 +403,13 @@ fun QuickMenu(
     val fpsLimiterEnabled = performance.fpsLimiterEnabled
     val fpsLimiterTarget = performance.fpsLimiterTarget
     val fpsLimiterMax = performance.fpsLimiterMax
+    val inputThrottlingEnabled = performance.inputThrottlingEnabled
+    val inputPollRateHz = performance.inputPollRateHz
     val onPerformanceHudConfigChanged = performance.onHudConfigChanged
     val onFpsLimiterEnabledChanged = performance.onFpsLimiterEnabledChanged
     val onFpsLimiterChanged = performance.onFpsLimiterChanged
+    val onInputThrottlingEnabledChanged = performance.onInputThrottlingEnabledChanged
+    val onInputPollRateHzChanged = performance.onInputPollRateHzChanged
     val isLsfgAvailable = lsfg.isAvailable
     val lsfgMultiplier = lsfg.multiplier
     val lsfgFlowScale = lsfg.flowScale
@@ -951,6 +960,8 @@ fun QuickMenu(
                                             fpsLimiterEnabled = fpsLimiterEnabled,
                                             fpsLimiterTarget = fpsLimiterTarget,
                                             fpsLimiterMax = fpsLimiterMax,
+                                            inputThrottlingEnabled = inputThrottlingEnabled,
+                                            inputPollRateHz = inputPollRateHz,
                                             lsfgMultiplier = if (isLsfgAvailable) lsfgMultiplier else 0,
                                             onTogglePerformanceHud = {
                                                 onItemSelected(QuickMenuAction.PERFORMANCE_HUD)
@@ -958,6 +969,8 @@ fun QuickMenu(
                                             onPerformanceHudConfigChanged = onPerformanceHudConfigChanged,
                                             onFpsLimiterEnabledChanged = onFpsLimiterEnabledChanged,
                                             onFpsLimiterChanged = onFpsLimiterChanged,
+                                            onInputThrottlingEnabledChanged = onInputThrottlingEnabledChanged,
+                                            onInputPollRateHzChanged = onInputPollRateHzChanged,
                                             scrollState = hudScrollState,
                                             focusRequester = hudItemFocusRequester,
                                             modifier = Modifier.fillMaxSize(),
@@ -1288,11 +1301,15 @@ private fun PerformanceHudQuickMenuTab(
     fpsLimiterEnabled: Boolean,
     fpsLimiterTarget: Int,
     fpsLimiterMax: Int,
+    inputThrottlingEnabled: Boolean,
+    inputPollRateHz: Int,
     lsfgMultiplier: Int,
     onTogglePerformanceHud: () -> Unit,
     onPerformanceHudConfigChanged: (PerformanceHudConfig) -> Unit,
     onFpsLimiterEnabledChanged: (Boolean) -> Unit,
     onFpsLimiterChanged: (Int) -> Unit,
+    onInputThrottlingEnabledChanged: (Boolean) -> Unit,
+    onInputPollRateHzChanged: (Int) -> Unit,
     scrollState: ScrollState,
     focusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
@@ -1340,6 +1357,36 @@ private fun PerformanceHudQuickMenuTab(
                     },
                     accentColor = accentColor,
                 )
+
+                Spacer(modifier = Modifier.height(8.dp))
+                QuickMenuToggleRow(
+                    title = stringResource(R.string.input_throttle_toggle),
+                    enabled = inputThrottlingEnabled,
+                    onToggle = { onInputThrottlingEnabledChanged(!inputThrottlingEnabled) },
+                    accentColor = accentColor,
+                )
+
+                AnimatedVisibility(
+                    visible = inputThrottlingEnabled,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut(),
+                ) {
+                    Column {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        QuickMenuAdjustmentRow(
+                            title = stringResource(R.string.input_poll_rate),
+                            valueText = "$inputPollRateHz Hz",
+                            progress = fpsLimiterProgress(inputPollRateHz, 240),
+                            onDecrease = {
+                                onInputPollRateHzChanged(previousFpsLimiterValue(inputPollRateHz, 240))
+                            },
+                            onIncrease = {
+                                onInputPollRateHzChanged(nextFpsLimiterValue(inputPollRateHz, 240))
+                            },
+                            accentColor = accentColor,
+                        )
+                    }
+                }
             }
         }
 

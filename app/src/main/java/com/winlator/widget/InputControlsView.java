@@ -13,8 +13,11 @@ import android.graphics.Point;
 import android.graphics.PointF;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
+import android.graphics.RectF;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.view.HapticFeedbackConstants;
+import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
@@ -48,7 +51,9 @@ import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Timer;
@@ -81,6 +86,28 @@ public class InputControlsView extends View {
     private XServer xServer;
     private final Bitmap[] icons = new Bitmap[40];
     private Timer mouseMoveTimer;
+    private long minJoystickPollIntervalNs = 1_000_000_000L / 60; // default 60 Hz
+    private long lastJoystickPollNanos = 0L;
+    private boolean inputThrottlingEnabled = true;
+    private final Set<Binding> pressedNonGamepadBindings = new HashSet<>();
+
+    public void setInputThrottlingEnabled(boolean enabled) {
+        this.inputThrottlingEnabled = enabled;
+    }
+
+    public boolean isInputThrottlingEnabled() {
+        return inputThrottlingEnabled;
+    }
+
+    /** Called from the sidebar UI during gameplay. hz is clamped to reasonable limits. */
+    public void setInputPollRateHz(int hz) {
+        int clamped = Math.max(15, Math.min(240, hz));
+        minJoystickPollIntervalNs = 1_000_000_000L / clamped;
+    }
+
+    public int getInputPollRateHz() {
+        return (int) (1_000_000_000L / minJoystickPollIntervalNs);
+    }
     private final PointF mouseMoveOffset = new PointF();
     private boolean showTouchscreenControls = true;
 
@@ -557,6 +584,7 @@ public class InputControlsView extends View {
         gyroController.onDetachedFromWindow();
         if (mouseMoveTimer != null)
             mouseMoveTimer.cancel();
+        pressedNonGamepadBindings.clear();
         super.onDetachedFromWindow();
     }
 
@@ -1037,15 +1065,15 @@ public class InputControlsView extends View {
     }
 
     /** Get the bounding rect for the container shooter mode toggle button at top center. */
-    private android.graphics.RectF getToggleButtonRect() {
+    private RectF getToggleButtonRect() {
         float btnW = snappingSize * 12;
         float btnH = snappingSize * 4;
         float cx = getWidth() / 2f;
-        return new android.graphics.RectF(cx - btnW / 2, snappingSize * 0.5f, cx + btnW / 2, snappingSize * 0.5f + btnH);
+        return new RectF(cx - btnW / 2, snappingSize * 0.5f, cx + btnW / 2, snappingSize * 0.5f + btnH);
     }
 
     private void drawContainerShooterToggle(Canvas canvas) {
-        android.graphics.RectF rect = getToggleButtonRect();
+        RectF rect = getToggleButtonRect();
         float radius = snappingSize * 0.5f;
         int primaryColor = getPrimaryColor();
 
@@ -1068,8 +1096,8 @@ public class InputControlsView extends View {
         paint.setTextAlign(Paint.Align.CENTER);
         float textY = rect.centerY() - (paint.descent() + paint.ascent()) * 0.5f;
         String label = getContext().getString(containerShooterModeRuntime
-                ? app.gamenative.R.string.shooter_mode_on
-                : app.gamenative.R.string.shooter_mode_off);
+                ? R.string.shooter_mode_on
+                : R.string.shooter_mode_off);
         canvas.drawText(label, rect.centerX(), textY, paint);
     }
 
@@ -1232,7 +1260,7 @@ public class InputControlsView extends View {
 
         // Check container shooter mode toggle button first
         if (containerShooterMode && isRuntimeToggleVisible()) {
-            android.graphics.RectF toggleRect = getToggleButtonRect();
+            RectF toggleRect = getToggleButtonRect();
             if (toggleRect.contains(x, y)) {
                 cancelTouchRouting();
                 containerShooterModeRuntime = !containerShooterModeRuntime;
@@ -1241,7 +1269,7 @@ public class InputControlsView extends View {
                     commitGamepadState();
                 }
                 applyShooterMouseInputMode();
-                performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
                 invalidate();
                 return true;
             }
@@ -1256,7 +1284,7 @@ public class InputControlsView extends View {
             // Skip hidden sticks in container shooter mode
             if (isStickHiddenByShooterMode(element)) continue;
             if (element.handleTouchDown(pointerId, x, y)) {
-                performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
                 handled = true;
                 if (allowButtonLookThrough
                         && element.getType() == ControlElement.Type.BUTTON
@@ -1365,17 +1393,27 @@ public class InputControlsView extends View {
 
     @Override
     public boolean onGenericMotionEvent(MotionEvent event) {
+        if ((event.getSource() & InputDevice.SOURCE_JOYSTICK) != 0 || (event.getSource() & InputDevice.SOURCE_GAMEPAD) != 0) {
+            // Physical controller events are handled by PhysicalControllerHandler to avoid double processing and lag
+            return false;
+        }
         if (!editMode && profile != null) {
             ExternalController controller = profile.getController(event.getDeviceId());
             if (controller != null && controller.updateStateFromMotionEvent(event)) {
                 ExternalControllerBinding controllerBinding;
+                // L2/R2 remain unthrottled - these are discrete buttons, not a stream of axes,
+                // and they don't spam XServer on their own (see dedup below).
                 controllerBinding = controller.getControllerBinding(KeyEvent.KEYCODE_BUTTON_L2);
                 if (controllerBinding != null) handleInputEvent(controllerBinding.getBindingCombo(), controller.state.isPressed(ExternalController.IDX_BUTTON_L2));
 
                 controllerBinding = controller.getControllerBinding(KeyEvent.KEYCODE_BUTTON_R2);
                 if (controllerBinding != null) handleInputEvent(controllerBinding.getBindingCombo(), controller.state.isPressed(ExternalController.IDX_BUTTON_R2));
 
-                processJoystickInput(controller);
+                long now = System.nanoTime();
+                if (!inputThrottlingEnabled || now - lastJoystickPollNanos >= minJoystickPollIntervalNs) {
+                    lastJoystickPollNanos = now;
+                    processJoystickInput(controller);
+                }
                 return true;
             }
         }
@@ -1446,7 +1484,7 @@ public class InputControlsView extends View {
                     boolean lookThroughCandidate = false;
                     for (ControlElement element : profile.getElements()) {
                         if (element.handleTouchDown(pointerId, x, y)) {
-                            performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+                            performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
                             handled = true;
                             if (event.getToolType(actionIndex) == MotionEvent.TOOL_TYPE_FINGER
                                     && element.getType() == ControlElement.Type.BUTTON
@@ -1612,7 +1650,7 @@ public class InputControlsView extends View {
             }
         }
         else {
-            java.util.List<Binding> bindings = bindingCombo.getBindings();
+            List<Binding> bindings = bindingCombo.getBindings();
             for (int i = bindings.size() - 1; i >= 0; i--) {
                 handleInputEvent(bindings.get(i), false, offset, source);
             }
@@ -1771,17 +1809,25 @@ public class InputControlsView extends View {
             }
             else {
                 Pointer.Button pointerButton = binding.getPointerButton();
+                boolean alreadyActive = pressedNonGamepadBindings.contains(binding);
                 if (isActionDown) {
-                    if (pointerButton != null) {
-                        xServer.injectPointerButtonPress(pointerButton);
+                    if (!alreadyActive) {
+                        pressedNonGamepadBindings.add(binding);
+                        if (pointerButton != null) {
+                            xServer.injectPointerButtonPress(pointerButton);
+                        }
+                        else binding.inject(xServer, true);
                     }
-                    else binding.inject(xServer, true);
+                    // already pressed - repeat call from the same held stick is ignored
                 }
                 else {
-                    if (pointerButton != null) {
-                        xServer.injectPointerButtonRelease(pointerButton);
+                    if (alreadyActive) {
+                        pressedNonGamepadBindings.remove(binding);
+                        if (pointerButton != null) {
+                            xServer.injectPointerButtonRelease(pointerButton);
+                        }
+                        else binding.inject(xServer, false);
                     }
-                    else binding.inject(xServer, false);
                 }
             }
         }

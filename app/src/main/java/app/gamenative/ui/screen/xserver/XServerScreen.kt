@@ -632,6 +632,8 @@ fun XServerScreen(
     var detectedMaxRefreshRateHz by remember { mutableIntStateOf(detectMaxRefreshRateHz(context, null)) }
     var fpsLimiterEnabled by rememberSaveable(container.id) { mutableStateOf(initialFpsLimiterEnabled(container)) }
     var fpsLimiterTarget by rememberSaveable(container.id) { mutableIntStateOf(initialFpsLimiterTarget(container)) }
+    var inputThrottlingEnabled by rememberSaveable(container.id) { mutableStateOf(PrefManager.inputThrottlingEnabled) }
+    var inputPollRateHz by rememberSaveable(container.id) { mutableIntStateOf(PrefManager.inputPollRateHz) }
 
     val gyroOverlaySuppressed = showQuickMenu || keepPausedForEditor || showElementEditor ||
         showPhysicalControllerDialog || showTouchGestureDialog || showShooterModeDialog ||
@@ -775,6 +777,21 @@ fun XServerScreen(
         if (isLsfgAvailable && lsfgMultiplier >= 2) {
             applyLsfgSettings()
         }
+    }
+
+    fun applyInputPollRateHz(hz: Int) {
+        val sanitized = hz.coerceIn(15, 240)
+        inputPollRateHz = sanitized
+        PrefManager.inputPollRateHz = sanitized
+        PluviaApp.inputControlsView?.setInputPollRateHz(sanitized)
+        physicalControllerHandler?.setInputPollRateHz(sanitized)
+    }
+
+    fun applyInputThrottlingEnabled(enabled: Boolean) {
+        inputThrottlingEnabled = enabled
+        PrefManager.inputThrottlingEnabled = enabled
+        PluviaApp.inputControlsView?.setInputThrottlingEnabled(enabled)
+        physicalControllerHandler?.setInputThrottlingEnabled(enabled)
     }
 
     fun applyLsfgMultiplier(mult: Int) {
@@ -2517,6 +2534,8 @@ fun XServerScreen(
             // Create InputControlsView and add to FrameLayout
             val icView = InputControlsView(context).apply {
                 // Configure InputControlsView
+                setInputThrottlingEnabled(inputThrottlingEnabled)
+                setInputPollRateHz(inputPollRateHz)
                 setXServer(xServerView.getxServer())
                 setTouchpadView(PluviaApp.touchpadView)
                 setGyroSettings(GyroSettings.fromContainer(container))
@@ -2578,6 +2597,8 @@ fun XServerScreen(
                             updatePhysicalStickAndGetMixedValue(binding, isDown, offset, sourceKeyCode)
                         },
                     )
+                    physicalControllerHandler?.setInputThrottlingEnabled(inputThrottlingEnabled)
+                    physicalControllerHandler?.setInputPollRateHz(inputPollRateHz)
                     radialMenuCoordinator?.bindPhysicalControllerHandler(physicalControllerHandler)
 
                     // Store profile for auto-show logic
@@ -2918,9 +2939,13 @@ fun XServerScreen(
                 fpsLimiterEnabled = fpsLimiterEnabled,
                 fpsLimiterTarget = fpsLimiterTarget,
                 fpsLimiterMax = detectedMaxRefreshRateHz,
+                inputThrottlingEnabled = inputThrottlingEnabled,
+                inputPollRateHz = inputPollRateHz,
                 onHudConfigChanged = ::applyPerformanceHudConfig,
                 onFpsLimiterEnabledChanged = ::applyFpsLimiterEnabled,
                 onFpsLimiterChanged = ::applyFpsLimiterTarget,
+                onInputThrottlingEnabledChanged = ::applyInputThrottlingEnabled,
+                onInputPollRateHzChanged = ::applyInputPollRateHz,
             ),
             hasPhysicalController = hasPhysicalController,
             isTouchscreenModeActive = isTouchscreenModeActive,

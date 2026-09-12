@@ -44,8 +44,10 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 
@@ -77,6 +79,14 @@ public class WinHandler {
     private final DatagramPacket sendPacket;
     private DatagramSocket socket;
     private final ArrayList<Integer> xinputProcesses;
+
+    private static class GamepadStateUpdateTask implements Runnable {
+        final int port;
+        private final Runnable action;
+        GamepadStateUpdateTask(int port, Runnable action) { this.port = port; this.action = action; }
+        @Override public void run() { action.run(); }
+    }
+
     private final XServer xServer;
     private final XServerRendererView xServerView;
 
@@ -89,7 +99,7 @@ public class WinHandler {
     private long lastStandalonePhoneRumbleMs = 0;
     private boolean isShowingAssignDialog = false;
     private Context activity;
-    private final java.util.Set<Integer> ignoredDeviceIds = new java.util.HashSet<>();
+    private final Set<Integer> ignoredDeviceIds = new HashSet<>();
     private RandomAccessFile gamepadRaf;
     private RandomAccessFile[] extraGamepadRafs = new RandomAccessFile[MAX_PLAYERS - 1];
 
@@ -482,6 +492,11 @@ public class WinHandler {
 
     private void addAction(Runnable action) {
         synchronized (this.actions) {
+            // Replace any existing pending gamepad state update for the SAME PORT with the latest one
+            if (action instanceof GamepadStateUpdateTask) {
+                final int port = ((GamepadStateUpdateTask) action).port;
+                this.actions.removeIf(r -> r instanceof GamepadStateUpdateTask && ((GamepadStateUpdateTask) r).port == port);
+            }
             this.actions.add(action);
             this.actions.notify();
         }
@@ -938,6 +953,8 @@ public class WinHandler {
         }
     }
 
+    private final byte[] lastSentUdpData = new byte[100];
+
     public void sendGamepadState() {
         if (!this.initReceived || this.gamepadClients.isEmpty()) {
             return;
@@ -945,23 +962,41 @@ public class WinHandler {
         final ControlsProfile profile = inputControlsView != null ? inputControlsView.getProfile() : null;
         final boolean useVirtualGamepad = isVirtualGamepadActive();
         final boolean enabled = this.currentController != null || useVirtualGamepad;
+
+        if (!enabled) return;
+
         Iterator<Integer> it = this.gamepadClients.iterator();
         while (it.hasNext()) {
-            final int port = it.next().intValue();
-            addAction(() -> {
+            final int port = it.next();
+            // Capture state data outside the background task
+            final GamepadState stateToCapture = useVirtualGamepad ? profile.getGamepadState() : (this.currentController != null ? this.currentController.state : null);
+            final int deviceId = !useVirtualGamepad ? (this.currentController != null ? this.currentController.getDeviceId() : 0) : profile.id;
+
+            if (stateToCapture == null) continue;
+
+            addAction(new GamepadStateUpdateTask(port, () -> {
                 this.sendData.rewind();
                 sendData.put(RequestCodes.GET_GAMEPAD_STATE);
-                sendData.put((byte)(enabled ? 1 : 0));
-                if (enabled) {
-                    this.sendData.putInt(!useVirtualGamepad ? this.currentController.getDeviceId() : inputControlsView.getProfile().id);
-                    if (useVirtualGamepad) {
-                        inputControlsView.getProfile().getGamepadState().writeTo(sendData);
-                    } else {
-                        this.currentController.state.writeTo(this.sendData);
+                sendData.put((byte) 1);
+                this.sendData.putInt(deviceId);
+                stateToCapture.writeTo(this.sendData);
+
+                // Only send if content actually changed
+                int size = this.sendData.position();
+                boolean changed = false;
+                byte[] currentData = this.sendData.array();
+                for (int i = 0; i < size; i++) {
+                    if (currentData[i] != lastSentUdpData[i]) {
+                        changed = true;
+                        break;
                     }
                 }
-                sendPacket(port);
-            });
+
+                if (changed) {
+                    System.arraycopy(currentData, 0, lastSentUdpData, 0, size);
+                    sendPacket(port);
+                }
+            }));
         }
     }
 

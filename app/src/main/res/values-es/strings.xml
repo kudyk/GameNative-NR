@@ -2361,6 +2361,8 @@
     <string name="steam_invite_online">En línea</string>
     <string name="steam_invite_offline">Desconectado</string>
     <string name="radial_menu">Menú radial</string>
+    <string name="input_throttle_toggle">Limitación de entrada</string>
+    <string name="input_poll_rate">Tasa de sondeo</string>
     <string name="radial_menu_settings_title">Menú radial</string>
     <string name="radial_menu_cancel">Cancelar</string>
     <string name="radial_menu_slot_count">Ranuras</string>

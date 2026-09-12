@@ -2357,6 +2357,8 @@
     <string name="steam_invite_online">Online</string>
     <string name="steam_invite_offline">Offline</string>
     <string name="radial_menu">Meniu radial</string>
+    <string name="input_throttle_toggle">Limitare input</string>
+    <string name="input_poll_rate">Rată de interogare</string>
     <string name="radial_menu_settings_title">Meniu radial</string>
     <string name="radial_menu_cancel">Anulează</string>
     <string name="radial_menu_slot_count">Sloturi</string>

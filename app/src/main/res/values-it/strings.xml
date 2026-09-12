@@ -2354,6 +2354,8 @@
     <string name="steam_invite_online">Online</string>
     <string name="steam_invite_offline">Offline</string>
     <string name="radial_menu">Menu radiale</string>
+    <string name="input_throttle_toggle">Limitazione input</string>
+    <string name="input_poll_rate">Frequenza di polling</string>
     <string name="radial_menu_settings_title">Menu radiale</string>
     <string name="radial_menu_cancel">Annulla</string>
     <string name="radial_menu_slot_count">Slot</string>

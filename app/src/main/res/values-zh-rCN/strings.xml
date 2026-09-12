@@ -2377,6 +2377,8 @@
     <string name="steam_invite_online">在线</string>
     <string name="steam_invite_offline">离线</string>
     <string name="radial_menu">径向菜单</string>
+    <string name="input_throttle_toggle">输入节流</string>
+    <string name="input_poll_rate">轮询率</string>
     <string name="radial_menu_settings_title">径向菜单</string>
     <string name="radial_menu_cancel">取消</string>
     <string name="radial_menu_slot_count">槽位</string>

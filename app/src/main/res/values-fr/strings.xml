@@ -2381,6 +2381,8 @@
     <string name="steam_invite_online">En ligne</string>
     <string name="steam_invite_offline">Hors ligne</string>
     <string name="radial_menu">Menu radial</string>
+    <string name="input_throttle_toggle">Limitation de l\'entrée</string>
+    <string name="input_poll_rate">Taux d\'interrogation</string>
     <string name="radial_menu_settings_title">Menu radial</string>
     <string name="radial_menu_cancel">Annuler</string>
     <string name="radial_menu_slot_count">Emplacements</string>

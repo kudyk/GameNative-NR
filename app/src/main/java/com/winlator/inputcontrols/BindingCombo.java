@@ -191,6 +191,11 @@ public final class BindingCombo {
         return false;
     }
 
+    public boolean hasAnalog() {
+        for (Binding binding : bindings) if (binding.isAnalog()) return true;
+        return false;
+    }
+
     public boolean isGamepadOnly() {
         if (bindings.isEmpty()) return false;
         for (Binding binding : bindings) if (!binding.isGamepad()) return false;
