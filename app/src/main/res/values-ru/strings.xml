@@ -2343,6 +2343,8 @@ https://gamenative.app
     <string name="steam_invite_online">В сети</string>
     <string name="steam_invite_offline">Не в сети</string>
     <string name="radial_menu">Радиальное меню</string>
+    <string name="input_throttle_toggle">Троттлинг инпута</string>
+    <string name="input_poll_rate">Частота опроса</string>
     <string name="radial_menu_settings_title">Радиальное меню</string>
     <string name="radial_menu_cancel">Отмена</string>
     <string name="radial_menu_slot_count">Слоты</string>

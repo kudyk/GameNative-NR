@@ -2281,6 +2281,8 @@
     <string name="steam_invite_online">Online</string>
     <string name="steam_invite_offline">Offline</string>
     <string name="radial_menu">Radialmenu</string>
+    <string name="input_throttle_toggle">Input throttling</string>
+    <string name="input_poll_rate">Opdateringshastighed</string>
     <string name="radial_menu_settings_title">Radialmenu</string>
     <string name="radial_menu_cancel">Annuller</string>
     <string name="radial_menu_slot_count">Pladser</string>
