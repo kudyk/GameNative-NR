@@ -3,7 +3,6 @@ package com.winlator.xenvironment.components;
 import android.content.Context;
 import android.icu.util.TimeZone;
 import android.os.Process;
-import android.util.Log;
 
 import com.winlator.PrefManager;
 import com.winlator.box86_64.Box86_64Preset;
@@ -24,6 +23,7 @@ import com.winlator.xenvironment.XEnvironment;
 import java.io.File;
 import java.util.Arrays;
 import java.util.List;
+import timber.log.Timber;
 
 public class GuestProgramLauncherComponent extends EnvironmentComponent {
     private String guestExecutable;
@@ -62,7 +62,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
             stop();
             extractBox86_64Files();
             pid = execGuestProgram();
-            Log.d("GuestProgramLauncherComponent", "Process " + pid + " started");
+            Timber.tag("GuestProgramLauncherComponent").d("Process " + pid + " started");
         }
     }
 
@@ -72,12 +72,11 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         synchronized (lock) {
             if (pid != -1) {
                 Process.killProcess(pid);
-                Log.d("GuestProgramLauncherComponent", "Stopped process " + pid);
+                Timber.tag("GuestProgramLauncherComponent").d("Stopped process " + pid);
                 pid = -1;
                 List<ProcessHelper.ProcessInfo> subProcesses = ProcessHelper.listSubProcesses();
                 for (ProcessHelper.ProcessInfo subProcess : subProcesses) {
-                    Log.d("GuestProgramLauncherComponent",
-                            "Sub-process still running: "
+                    Timber.tag("GuestProgramLauncherComponent").d("Sub-process still running: "
                                     + subProcess.name + " | "
                                     + subProcess.pid + " | "
                                     + subProcess.ppid + ", stopping..."
@@ -199,7 +198,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         return exec(context, false, new String[0], null, null, prootCmd, null);
     }
     public static int exec(Context context, boolean proot32, String[] bindingPaths, EnvVars extraVars, Callback<Integer> terminationCallback, String prootCmd, File workingDir) {
-        Log.d("GuestProgramLauncherComponent", "Executing guest program");
+        Timber.tag("GuestProgramLauncherComponent").d("Executing guest program");
         // Context context = environment.getContext();
         // ImageFs imageFs = environment.getImageFs();
         ImageFs imageFs = ImageFs.find(context);
@@ -209,7 +208,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         File nativeLibs = new File(nativeLibraryDir);
         // Log.d("GuestProgramLauncherComponent", nativeLibraryDir + " exists: " + nativeLibs.exists());
         // Log.d("GuestProgramLauncherComponent", nativeLibraryDir + " is directory: " + nativeLibs.isDirectory());
-        Log.d("GuestProgramLauncherComponent", nativeLibraryDir + " contains: " + Arrays.toString(Arrays.stream(nativeLibs.listFiles()).map(File::getName).toArray()));
+        Timber.tag("GuestProgramLauncherComponent").d(nativeLibraryDir + " contains: " + Arrays.toString(Arrays.stream(nativeLibs.listFiles()).map(File::getName).toArray()));
         // nativeLibraryDir = nativeLibraryDir.replace("arm64", "arm64-v8a");
         // Log.d("GuestProgramLauncherComponent", nativeLibraryDir + " exists: " + (new File(nativeLibraryDir)).exists());
         // Log.d("GuestProgramLauncherComponent", steamApiPath + " exists: " + new File(steamApiPath).exists());
@@ -291,7 +290,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
 
         // ProcessHelper.exec(nativeLibraryDir+"/libproot.so ulimit -a", envVars.toStringArray(), rootDir);
         return ProcessHelper.exec(command, envVars.toStringArray(), workingDir != null ? workingDir : rootDir, (status) -> {
-            Log.d("GuestProgramLauncherComponent", "Process terminated " + pid + " with status " + status);
+            Timber.tag("GuestProgramLauncherComponent").d("Process terminated " + pid + " with status " + status);
             synchronized (lock) {
                 pid = -1;
             }

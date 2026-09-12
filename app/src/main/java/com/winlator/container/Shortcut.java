@@ -2,8 +2,6 @@ package com.winlator.container;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.util.Log;
-
 import com.winlator.core.FileUtils;
 import com.winlator.core.StringUtils;
 
@@ -12,6 +10,7 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.util.Iterator;
+import timber.log.Timber;
 
 public class Shortcut {
     public final Container container;
@@ -66,7 +65,7 @@ public class Shortcut {
                         extraData.put(key, value);
                     }
                     catch (JSONException e) {
-                        Log.e("Shortcut", "Failed to put extra data: " + e);
+                        Timber.tag("Shortcut").e("Failed to put extra data: " + e);
                     }
                 }
             }
@@ -102,7 +101,7 @@ public class Shortcut {
             else extraData.remove(name);
         }
         catch (JSONException e) {
-            Log.e("Shortcut", "Failed to put extra: " + e);
+            Timber.tag("Shortcut").e("Failed to put extra: " + e);
         }
     }
 
@@ -122,7 +121,7 @@ public class Shortcut {
                     content += key + "=" + extraData.getString(key) + "\n";
                 }
                 catch (JSONException e) {
-                    Log.e("Shortcut", "Failed to save extra data: " + e);
+                    Timber.tag("Shortcut").e("Failed to save extra data: " + e);
                 }
             }
         }

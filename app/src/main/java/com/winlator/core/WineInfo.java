@@ -3,8 +3,6 @@ package com.winlator.core;
 import android.content.Context;
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.util.Log;
-
 import androidx.annotation.NonNull;
 
 import com.winlator.contents.ContentProfile;
@@ -16,6 +14,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import app.gamenative.R;
+import timber.log.Timber;
 
 public class WineInfo implements Parcelable {
     public static final WineInfo MAIN_WINE_VERSION = new WineInfo("wine", "9.2", "x86_64");
@@ -147,7 +146,7 @@ public class WineInfo implements Parcelable {
         ImageFs imageFs = ImageFs.find(context);
         String path = "";
 
-        Log.d("WineInfo", "Creating WineInfo from identifier " + identifier);
+        Timber.tag("WineInfo").d("Creating WineInfo from identifier " + identifier);
 
         if (identifier.equals(MAIN_WINE_VERSION.identifier())) return new WineInfo(MAIN_WINE_VERSION.type, MAIN_WINE_VERSION.version, MAIN_WINE_VERSION.arch, null);
 

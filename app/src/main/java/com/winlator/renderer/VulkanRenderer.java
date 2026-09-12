@@ -22,6 +22,8 @@ import com.winlator.xserver.XServer;
 
 import java.util.ArrayList;
 
+import timber.log.Timber;
+
 public class VulkanRenderer implements WindowManager.OnWindowModificationListener,
                                        Pointer.OnPointerMotionListener,
                                        XServerRenderer {
@@ -111,7 +113,7 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
             long ext = nativeGetXrTargetExtent(nativeHandle);
             bridge.onScanoutBuffer(xrTargetAhbPtr, (int)(ext >>> 32), (int)(ext & 0xFFFFFFFFL));
         } else {
-            android.util.Log.w("VulkanRenderer", "XR scene target unavailable, falling back to per-window forwarding");
+            Timber.tag("VulkanRenderer").w("XR scene target unavailable, falling back to per-window forwarding");
         }
     }
 
@@ -274,7 +276,7 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
                                         }
                                     }
                                 } catch (Exception e) {
-                                    android.util.Log.w("VulkanRenderer", "SC recreate failed on surface restore: " + e);
+                                    Timber.tag("VulkanRenderer").w("SC recreate failed on surface restore: " + e);
                                     synchronized (lock) {
                                         if (nativeHandle != 0) nativeInitScanout(nativeHandle);
                                     }
@@ -360,7 +362,7 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
             txn.apply();
             txn.close();
         } catch (Exception e) {
-            android.util.Log.w("VulkanRenderer", "Scanout color transform unavailable: " + e);
+            Timber.tag("VulkanRenderer").w("Scanout color transform unavailable: " + e);
         }
     }
 
@@ -755,7 +757,7 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
                         }
                     }
                 } catch (Exception e) {
-                    android.util.Log.w("VulkanRenderer", "Sibling SC failed, using child SC: " + e);
+                    Timber.tag("VulkanRenderer").w("Sibling SC failed, using child SC: " + e);
                     synchronized (lock) {
                         if (nativeHandle != 0) nativeInitScanout(nativeHandle);
                     }
@@ -785,8 +787,7 @@ public class VulkanRenderer implements WindowManager.OnWindowModificationListene
         this.driverPath = driverPath;
         this.driverLibraryName = libraryName;
         this.nativeLibDir = nativeLibDir;
-        android.util.Log.d("Winlator_Renderer",
-            "setDriverInfo: path=" + driverPath + " lib=" + libraryName);
+        Timber.tag("Winlator_Renderer").d("setDriverInfo: path=%s lib=%s", driverPath, libraryName);
     }
 
     public void setVerboseLog(boolean v) {

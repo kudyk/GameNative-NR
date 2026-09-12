@@ -2,8 +2,6 @@ package com.winlator.core;
 
 import android.content.Context;
 import android.opengl.EGL14;
-import android.util.Log;
-
 import androidx.collection.ArrayMap;
 
 import com.winlator.PrefManager;
@@ -20,6 +18,7 @@ import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.egl.EGLContext;
 import javax.microedition.khronos.egl.EGLDisplay;
 import javax.microedition.khronos.opengles.GL10;
+import timber.log.Timber;
 
 public abstract class GPUInformation {
 
@@ -121,7 +120,7 @@ public abstract class GPUInformation {
             try {
                 thread.wait();
             } catch (InterruptedException e) {
-                Log.e("GPUInformation", "Failed to load gpu information: " + e);
+                Timber.tag("GPUInformation").e("Failed to load gpu information: " + e);
             }
         }
         return gpuInfo;

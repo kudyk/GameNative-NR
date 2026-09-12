@@ -2,8 +2,6 @@ package com.winlator.xenvironment;
 
 import android.content.Context;
 import android.content.res.AssetManager;
-import android.util.Log;
-
 import app.gamenative.BuildConfig;
 import app.gamenative.R;
 import app.gamenative.enums.Marker;
@@ -41,6 +39,7 @@ import java.util.Arrays;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
+import timber.log.Timber;
 
 public abstract class ImageFsInstaller {
     public static final byte LATEST_VERSION = 31;
@@ -137,7 +136,7 @@ public abstract class ImageFsInstaller {
             if (Arrays.asList(context.getAssets().list("")).contains(imagefsFile) == true){
                 final long contentLength = (long) (FileUtils.getSize(assetManager, imagefsFile) * (100.0f / compressionRatio));
                 AtomicLong totalSizeRef = new AtomicLong();
-                Log.d("Extraction", "extracting " + imagefsFile);
+                Timber.tag("Extraction").d("extracting " + imagefsFile);
 
                 success = TarCompressorUtils.extract(TarCompressorUtils.Type.XZ, assetManager, imagefsFile, rootDir, (file, size) -> {
                     if (size > 0) {
@@ -154,7 +153,7 @@ public abstract class ImageFsInstaller {
             else if (downloaded.exists()){
                 final long contentLength = (long) (FileUtils.getSize(downloaded) * (100.0f / compressionRatio));
                 AtomicLong totalSizeRef = new AtomicLong();
-                Log.d("Extraction", "extracting " + imagefsFile);
+                Timber.tag("Extraction").d("extracting " + imagefsFile);
                 success = TarCompressorUtils.extract(TarCompressorUtils.Type.XZ, downloaded, rootDir, (file, size) -> {
                     if (size > 0) {
                         long totalSize = totalSizeRef.addAndGet(size);
@@ -168,7 +167,7 @@ public abstract class ImageFsInstaller {
             }
 
             if (success) {
-                Log.d("ImageFsInstaller", "Successfully installed system files");
+                Timber.tag("ImageFsInstaller").d("Successfully installed system files");
                 ContainerManager containerManager = new ContainerManager(context);
 
                 installWineFromDownloads(context);
@@ -180,9 +179,9 @@ public abstract class ImageFsInstaller {
                 clearSteamDllMarkers(context, containerManager);
             }
             else {
-                Log.e("ImageFsInstaller", "Failed to install system files");
+                Timber.tag("ImageFsInstaller").e("Failed to install system files");
                 if (downloaded.exists()) {
-                    Log.w("ImageFsInstaller", "Deleting corrupt archive so next attempt re-downloads: " + downloaded.getPath());
+                    Timber.tag("ImageFsInstaller").w("Deleting corrupt archive so next attempt re-downloads: " + downloaded.getPath());
                     downloaded.delete();
                 }
             }
@@ -200,7 +199,7 @@ public abstract class ImageFsInstaller {
                     TarCompressorUtils.Type.ZSTD,      // you said .tzst
                     in, imagefs);                      // helper already exists in the project
         } catch (IOException e) {
-            Log.e("ImageFsInstaller", "redirect deploy failed", e);
+            Timber.tag("ImageFsInstaller").e(e, "redirect deploy failed");
             return;
         }
 
@@ -220,7 +219,7 @@ public abstract class ImageFsInstaller {
                     new ProgressCallback() {
                         @Override
                         public void onProgress(float progress) {
-                            Log.d("ImageFsInstaller", "Downloading extras.tzst: " + (int)(progress * 100) + "%");
+                            Timber.tag("ImageFsInstaller").d("Downloading extras.tzst: " + (int)(progress * 100) + "%");
                         }
                     }
                 );
@@ -228,11 +227,11 @@ public abstract class ImageFsInstaller {
                 if (extrasFile != null && extrasFile.exists()) {
                     TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, extrasFile, imagefs);
                 } else {
-                    Log.e("ImageFsInstaller", "Failed to download extras.tzst");
+                    Timber.tag("ImageFsInstaller").e("Failed to download extras.tzst");
                     return;
                 }
             } catch (Exception e) {
-                Log.e("ImageFsInstaller", "extras download/extract failed", e);
+                Timber.tag("ImageFsInstaller").e(e, "extras download/extract failed");
                 return;
             }
         } else {
@@ -241,7 +240,7 @@ public abstract class ImageFsInstaller {
             try (InputStream in = ctx.getAssets().open(EXTRAS_TAR)) {
                 TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, in, imagefs);
             } catch (IOException e) {
-                Log.e("ImageFsInstaller", "extras deploy failed", e);
+                Timber.tag("ImageFsInstaller").e(e, "extras deploy failed");
                 return;
             }
         }
@@ -258,11 +257,11 @@ public abstract class ImageFsInstaller {
         ImageFs imageFs = ImageFs.find(context);
         String wineVersion = container.getWineVersion();
         if (!ImageFSLegacyMigrator.migrateLegacyDirsIfNeeded(context, imageFs.getRootDir(), wineVersion)) {
-            Log.w("ImageFsInstaller", "Failed to migrate legacy directories before installation.");
+            Timber.tag("ImageFsInstaller").w("Failed to migrate legacy directories before installation.");
             return Executors.newSingleThreadExecutor().submit(() -> false);
         }
         if (!imageFs.isValid() || imageFs.getVersion() < LATEST_VERSION || !imageFs.getVariant().equals(container.getContainerVariant())) {
-            Log.d("ImageFsInstaller", "Installing image from assets");
+            Timber.tag("ImageFsInstaller").d("Installing image from assets");
             return installFromAssetsFuture(
                     context,
                     assetManager,
@@ -271,7 +270,7 @@ public abstract class ImageFsInstaller {
                     onProgress
             );
         } else {
-            Log.d("ImageFsInstaller", "Image FS already valid and at latest version");
+            Timber.tag("ImageFsInstaller").d("Image FS already valid and at latest version");
             return Executors.newSingleThreadExecutor().submit(() -> {
                 ensureBionicLib(context, imageFs.getRootDir());
                 return true;
@@ -314,7 +313,7 @@ public abstract class ImageFsInstaller {
 
             // Keep imported Wine/Proton installations
             if (isImportedWineProton(context, fileName)) {
-                Log.d("ImageFsInstaller", "Preserving imported installation: " + fileName);
+                Timber.tag("ImageFsInstaller").d("Preserving imported installation: " + fileName);
                 continue;
             }
 
@@ -335,7 +334,7 @@ public abstract class ImageFsInstaller {
                         }
                         // Preserve imported Wine/Proton installations in opt/
                         if (name.equals("opt")) {
-                            Log.d("ImageFsInstaller", "Clearing opt directory while preserving imported Wine/Proton installations");
+                            Timber.tag("ImageFsInstaller").d("Clearing opt directory while preserving imported Wine/Proton installations");
                             clearOptDir(context, file);
                             continue;
                         }
@@ -418,7 +417,7 @@ public abstract class ImageFsInstaller {
                 // preloaderDialog.closeOnUiThread();
             }
             catch (JSONException e) {
-                Log.e("ImageFsInstaller", "Failed to read JSON data: " + e);
+                Timber.tag("ImageFsInstaller").e("Failed to read JSON data: " + e);
             }
         });
     }
@@ -436,14 +435,14 @@ public abstract class ImageFsInstaller {
                     MarkerUtils.INSTANCE.removeMarker(mappedPath, Marker.STEAM_DLL_REPLACED);
                     MarkerUtils.INSTANCE.removeMarker(mappedPath, Marker.STEAM_DLL_RESTORED);
                     MarkerUtils.INSTANCE.removeMarker(mappedPath, Marker.STEAM_COLDCLIENT_USED);
-                    Log.i("ImageFsInstaller", "Cleared markers for container: " + container.getName() + " (ID: " + container.id + ")");
+                    Timber.tag("ImageFsInstaller").i("Cleared markers for container: " + container.getName() + " (ID: " + container.id + ")");
                 } catch (Exception e) {
-                    Log.w("ImageFsInstaller", "Failed to clear markers for container ID " + container.id + ": " + e.getMessage());
+                    Timber.tag("ImageFsInstaller").w("Failed to clear markers for container ID " + container.id + ": " + e.getMessage());
                 }
             }
-            Log.i("ImageFsInstaller", "Finished clearing Steam DLL markers for all containers");
+            Timber.tag("ImageFsInstaller").i("Finished clearing Steam DLL markers for all containers");
         } catch (Exception e) {
-            Log.e("ImageFsInstaller", "Error clearing Steam DLL markers: " + e.getMessage());
+            Timber.tag("ImageFsInstaller").e("Error clearing Steam DLL markers: " + e.getMessage());
         }
     }
 
@@ -477,14 +476,14 @@ public abstract class ImageFsInstaller {
         if (protonVersion == null || protonVersion.isEmpty() || !protonVersion.startsWith("proton-")) return;
         File optDir = new File(rootDir, "opt");
         if (!optDir.exists() && !optDir.mkdirs()) {
-            Log.e("ImageFsInstaller", "Failed to create opt directory: " + optDir.getAbsolutePath());
+            Timber.tag("ImageFsInstaller").e("Failed to create opt directory: " + optDir.getAbsolutePath());
             return;
         }
         removeCurrentProtonSymlink(optDir, protonVersion);
 
         File targetVersionDir = resolveInstalledProtonDir(context, protonVersion);
         if (!targetVersionDir.isDirectory()) {
-            Log.w("ImageFsInstaller", "Skipping Proton symlink; shared dir missing for " + protonVersion);
+            Timber.tag("ImageFsInstaller").w("Skipping Proton symlink; shared dir missing for " + protonVersion);
             return;
         }
         File optVersionLink = new File(optDir, protonVersion);
@@ -495,17 +494,17 @@ public abstract class ImageFsInstaller {
 
             FileUtils.symlink(targetVersionDir.getAbsolutePath(), optVersionLink.getAbsolutePath());
             if (!Files.isSymbolicLink(optVersionLink.toPath())) {
-                Log.e("ImageFsInstaller", "Failed to create Proton symlink at: " + optVersionLink.getAbsolutePath());
+                Timber.tag("ImageFsInstaller").e("Failed to create Proton symlink at: " + optVersionLink.getAbsolutePath());
                 return;
             }
             File linkedTarget = optVersionLink.getCanonicalFile();
             if (!linkedTarget.equals(desiredTarget)) {
-                Log.e("ImageFsInstaller", "Proton symlink points to unexpected target: " + linkedTarget);
+                Timber.tag("ImageFsInstaller").e("Proton symlink points to unexpected target: " + linkedTarget);
                 return;
             }
-            Log.d("ImageFsInstaller", "Created opt/" + protonVersion + " -> " + targetVersionDir.getAbsolutePath());
+            Timber.tag("ImageFsInstaller").d("Created opt/" + protonVersion + " -> " + targetVersionDir.getAbsolutePath());
         } catch (Exception e) {
-            Log.e("ImageFsInstaller", "ensureProtonVersionSymlink failed for " + protonVersion, e);
+            Timber.tag("ImageFsInstaller").e(e, "ensureProtonVersionSymlink failed for " + protonVersion);
         }
     }
 
@@ -522,7 +521,7 @@ public abstract class ImageFsInstaller {
     private static boolean deleteExistingPathIfPresent(File path) {
         if (!Files.isSymbolicLink(path.toPath()) && !path.exists()) return true;
         if (FileUtils.delete(path)) return true;
-        Log.e("ImageFsInstaller", "Failed to delete existing Proton path: " + path.getAbsolutePath());
+        Timber.tag("ImageFsInstaller").e("Failed to delete existing Proton path: " + path.getAbsolutePath());
         return false;
     }
 

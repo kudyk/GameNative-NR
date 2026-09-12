@@ -1,8 +1,6 @@
 package com.winlator.core;
 
 import android.content.Context;
-import android.util.Log;
-
 import com.winlator.container.Container;
 
 import org.json.JSONArray;
@@ -10,6 +8,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
+import timber.log.Timber;
 
 public abstract class WineStartMenuCreator {
     private static int parseShowCommand(String value) {
@@ -88,7 +87,7 @@ public abstract class WineStartMenuCreator {
             for (int i = 0; i < data.length(); i++) createMenuEntry(data.getJSONObject(i), startMenuDir);
         }
         catch (JSONException e) {
-            Log.e("WineStartMenuCreator", "Failed to create: " + e);
+            Timber.tag("WineStartMenuCreator").e("Failed to create: " + e);
         }
     }
 }

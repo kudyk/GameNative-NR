@@ -23,6 +23,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.TreeMap;
+import timber.log.Timber;
 
 public class RCManager {
     private LinkedList<RCFile> rcfiles;
@@ -107,7 +108,7 @@ public class RCManager {
                         maxRCFileId = Math.max(maxRCFileId, rcfile.id);
                         rcfiles.add(rcfile);
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        Timber.e(e);
                     }
                 }
             }
@@ -175,7 +176,7 @@ public class RCManager {
 
             return rcfile;
         } catch (JSONException e) {
-            e.printStackTrace();
+            Timber.e(e);
         }
         return null;
     }

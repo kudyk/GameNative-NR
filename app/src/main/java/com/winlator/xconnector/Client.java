@@ -1,10 +1,9 @@
 package com.winlator.xconnector;
 
-import android.util.Log;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import timber.log.Timber;
 
 public class Client {
     public final ClientSocket clientSocket;
@@ -60,7 +59,7 @@ public class Client {
             (new ClientSocket(shutdownFd)).write(data);
         }
         catch (IOException e) {
-            Log.e("Client", "Failed to shutdown: " + e);
+            Timber.tag("Client").e("Failed to shutdown: " + e);
         }
     }
 }

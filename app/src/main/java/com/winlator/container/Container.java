@@ -1,8 +1,6 @@
 package com.winlator.container;
 
 import android.os.Environment;
-import android.util.Log;
-
 import com.winlator.box86_64.Box86_64Preset;
 import com.winlator.core.DefaultVersion;
 import com.winlator.core.envvars.EnvVars;
@@ -21,6 +19,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.util.Iterator;
 import java.util.Locale;
+import timber.log.Timber;
 
 public class Container {
     public enum XrControllerMapping {
@@ -634,7 +633,7 @@ public class Container {
             else extraData.remove(name);
         }
         catch (JSONException e) {
-            Log.e("Container", "Failed to put extra: " + e);
+            Timber.tag("Container").e("Failed to put extra: " + e);
         }
     }
 
@@ -660,7 +659,7 @@ public class Container {
             else sessionMetadata.remove(name);
         }
         catch (JSONException e) {
-            Log.e("Container", "Failed to put session metadata: " + e);
+            Timber.tag("Container").e("Failed to put session metadata: " + e);
         }
     }
 
@@ -883,7 +882,7 @@ public class Container {
             return FileUtils.writeString(getConfigFile(), data.toString());
         }
         catch (JSONException e) {
-            Log.e("Container", "Failed to save data: " + e);
+            Timber.tag("Container").e("Failed to save data: " + e);
             return false;
         }
     }
@@ -1192,7 +1191,7 @@ public class Container {
             data.put("wincomponents", result);
         }
         catch (JSONException e) {
-            Log.e("Container", "Failed to check obsolete or missing properties: " + e);
+            Timber.tag("Container").e("Failed to check obsolete or missing properties: " + e);
         }
     }
 
@@ -1292,7 +1291,7 @@ public class Container {
     public String getContainerJson() {
         String content = FileUtils.readString(getConfigFile());
         if (content == null) {
-            Log.e("Container", "Failed to read container config file");
+            Timber.tag("Container").e("Failed to read container config file");
             return "{}";
             }
         return content.replace("\\u0000", "").replace("\u0000", "");

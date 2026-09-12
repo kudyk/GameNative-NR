@@ -8,8 +8,6 @@ import android.os.Environment;
 import android.os.StatFs;
 import android.system.ErrnoException;
 import android.system.Os;
-import android.util.Log;
-
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
@@ -36,6 +34,7 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import timber.log.Timber;
 
 public abstract class FileUtils {
     public static byte[] read(Context context, String assetFile) {
@@ -84,7 +83,7 @@ public abstract class FileUtils {
             return true;
         }
         catch (IOException e) {
-            e.printStackTrace();
+            Timber.e(e);
         }
         return false;
     }
@@ -107,7 +106,7 @@ public abstract class FileUtils {
             success = true;
         }
         catch (IOException e) {
-            e.printStackTrace();
+            Timber.e(e);
             // Clean up temp file on failure
             tempFile.delete();
             return false;
@@ -123,7 +122,7 @@ public abstract class FileUtils {
                 return true;
             }
             catch (IOException e) {
-                Log.e("FileUtils", "Failed to atomically move temp file: " + e);
+                Timber.tag("FileUtils").e("Failed to atomically move temp file: " + e);
                 tempFile.delete();
                 return false;
             }
@@ -142,7 +141,7 @@ public abstract class FileUtils {
             Os.symlink(linkTarget, linkFile);
         }
         catch (ErrnoException e) {
-            Log.e("FileUtils", "Failed to symlink: " + e);
+            Timber.tag("FileUtils").e("Failed to symlink: " + e);
         }
     }
 
@@ -244,7 +243,7 @@ public abstract class FileUtils {
                 }
             }
             catch (IOException e) {
-                Log.e("FileUtils", "Failed to copy directory: " + e);
+                Timber.tag("FileUtils").e("Failed to copy directory: " + e);
             }
         }
         else {
@@ -257,7 +256,7 @@ public abstract class FileUtils {
                 StreamUtils.copy(inStream, outStream);
             }
             catch (IOException e) {
-                Log.e("FileUtils", "Failed to copy file: " + e);
+                Timber.tag("FileUtils").e("Failed to copy file: " + e);
             }
         }
     }
@@ -274,7 +273,7 @@ public abstract class FileUtils {
             return new BufferedReader(new InputStreamReader(fis, StandardCharsets.UTF_8)).readLine();
         }
         catch (IOException e) {
-            e.printStackTrace();
+            Timber.e(e);
             return null;
         }
     }
@@ -287,7 +286,7 @@ public abstract class FileUtils {
             while ((line = reader.readLine()) != null) lines.add(line);
         }
         catch (IOException e) {
-            e.printStackTrace();
+            Timber.e(e);
         }
         return lines;
     }
@@ -311,13 +310,13 @@ public abstract class FileUtils {
     }
 
     public static void chmod(File file, int mode) {
-        Log.d("FileUtils", "Attempting to chmod " + file.getAbsolutePath());
+        Timber.tag("FileUtils").d("Attempting to chmod " + file.getAbsolutePath());
         try {
             Os.chmod(file.getAbsolutePath(), mode);
-            Log.d("FileUtils", "Successfully chmod-ed " + file.getAbsolutePath());
+            Timber.tag("FileUtils").d("Successfully chmod-ed " + file.getAbsolutePath());
         }
         catch (ErrnoException e) {
-            Log.e("FileUtils", "Failed to chmod " + file.getAbsolutePath() + ": " + e);
+            Timber.tag("FileUtils").e("Failed to chmod " + file.getAbsolutePath() + ": " + e);
         }
     }
 
@@ -450,7 +449,7 @@ public abstract class FileUtils {
             }
         }
         catch (Exception e) {
-            Log.e("FileUtils", "Failed to read int: " + e);
+            Timber.tag("FileUtils").e("Failed to read int: " + e);
         }
         return result;
     }
@@ -578,7 +577,7 @@ public abstract class FileUtils {
             file.write(data);
             return true;
         } catch (IOException e) {
-            Log.e("FileUtils", "Failed to write data " + data + " at " + position + " to " + filename);
+            Timber.tag("FileUtils").e("Failed to write data " + data + " at " + position + " to " + filename);
             return false;
         }
     }

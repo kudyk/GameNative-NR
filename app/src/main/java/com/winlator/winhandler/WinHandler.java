@@ -6,7 +6,6 @@ import android.net.Uri;
 import android.os.SystemClock;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
-import android.util.Log;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -187,7 +186,7 @@ public class WinHandler {
     }
 
     private void refreshControllerMappings(boolean clearDisconnectedSlots) {
-        Log.d(TAG, "Refreshing controller assignments from settings...");
+        Timber.tag(TAG).d("Refreshing controller assignments from settings...");
         currentController = null;
         for (int i = 0; i < extraControllers.length; i++) {
             extraControllers[i] = null;
@@ -198,10 +197,10 @@ public class WinHandler {
             currentController = ExternalController.getController(p1Device.getId());
             if (currentController != null) {
                 currentController.setContext(activity);
-                Log.i(TAG, "Initialized Player 1 with: " + describeDevice(p1Device));
+                Timber.tag(TAG).i("Initialized Player 1 with: " + describeDevice(p1Device));
             }
         } else {
-            Log.i(TAG, "Player 1 has no assigned connected controller");
+            Timber.tag(TAG).i("Player 1 has no assigned connected controller");
         }
         setGamepadSlotConnected(0, currentController != null || isVirtualGamepadActive());
         // Initialize Extra Players (2, 3, 4)
@@ -213,9 +212,9 @@ public class WinHandler {
                 if (extraControllers[i] != null) {
                     extraControllers[i].setContext(activity);
                 }
-                Log.i(TAG, "Initialized Player " + (i + 2) + " with: " + describeDevice(extraDevice));
+                Timber.tag(TAG).i("Initialized Player " + (i + 2) + " with: " + describeDevice(extraDevice));
             } else {
-                Log.i(TAG, "Player " + (i + 2) + " has no assigned connected controller");
+                Timber.tag(TAG).i("Player " + (i + 2) + " has no assigned connected controller");
             }
             setGamepadSlotConnected(i + 1, extraControllers[i] != null);
         }
@@ -298,7 +297,7 @@ public class WinHandler {
         lastLowFreq[slot] = 0;
         lastHighFreq[slot] = 0;
         rumbleDeviceIds[slot] = -1;
-        Log.i(TAG, "Cleared disconnected Player " + (slot + 1) + " gamepad state");
+        Timber.tag(TAG).i("Cleared disconnected Player " + (slot + 1) + " gamepad state");
     }
 
     private void setGamepadSlotConnected(int slot, boolean connected) {
@@ -311,7 +310,7 @@ public class WinHandler {
         }
         buffer.putInt(OFF_CONNECTED, connected ? 1 : 0);
         notifyStateChanged(slot);
-        Log.i(TAG, "Player " + (slot + 1) + " connected=" + connected);
+        Timber.tag(TAG).i("Player " + (slot + 1) + " connected=" + connected);
     }
 
     private void writeNeutralGamepadState(MappedByteBuffer buffer) {
@@ -651,7 +650,7 @@ public class WinHandler {
                             final int MAX_NAME_LENGTH = 54;
                             byte[] bytesToWrite;
                             if (originalBytes.length > MAX_NAME_LENGTH) {
-                                Log.w("WinHandler", "Controller name is too long ("+originalBytes.length+" bytes), truncating: "+originalName);
+                                Timber.tag("WinHandler").w("Controller name is too long ("+originalBytes.length+" bytes), truncating: "+originalName);
                                 bytesToWrite = new byte[MAX_NAME_LENGTH];
                                 System.arraycopy(originalBytes, 0, bytesToWrite, 0, MAX_NAME_LENGTH);
                             } else {
@@ -733,7 +732,7 @@ public class WinHandler {
 
     public void setCurrentController(int deviceId) {
         if (currentControllerId != deviceId) {
-            Log.d(TAG, "setCurrentController deviceId=" + deviceId);
+            Timber.tag(TAG).d("setCurrentController deviceId=" + deviceId);
             this.currentControllerId = deviceId;
         }
     }
@@ -757,7 +756,7 @@ public class WinHandler {
                 gamepadRaf.setLength(64);
                 gamepadBuffer = gamepadRaf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, 64);
                 gamepadBuffer.order(ByteOrder.LITTLE_ENDIAN);
-                Log.i(TAG, "Successfully created and mapped gamepad file for Player 1");
+                Timber.tag(TAG).i("Successfully created and mapped gamepad file for Player 1");
             }
 
             for (int i = 0; i < extraGamepadBuffers.length; i++) {
@@ -769,7 +768,7 @@ public class WinHandler {
                 extraGamepadBuffers[i].order(ByteOrder.LITTLE_ENDIAN);
             }
         } catch (IOException e) {
-            Log.e("EVSHIM_HOST", "FATAL: Failed to create memory-mapped file(s).", e);
+            Timber.tag("EVSHIM_HOST").e(e, "FATAL: Failed to create memory-mapped file(s).");
             try {
                 this.localhost = InetAddress.getByName("127.0.0.1");
             } catch (UnknownHostException e2) {
@@ -877,7 +876,7 @@ public class WinHandler {
                     } catch (InterruptedException e) {
                         return;
                     } catch (Throwable t) {
-                        Log.e(TAG, "Rumble keepalive failed", t);
+                        Timber.tag(TAG).e(t, "Rumble keepalive failed");
                     }
                 }
             }
@@ -960,7 +959,7 @@ public class WinHandler {
 
         // --- Step 3: Fallback to phone vibration only for a real controller without rumble.
         if (!controllerVibrated && device != null) {
-            Log.w("WinHandler", "No physical controller vibrator found, falling back to device vibration.");
+            Timber.tag("WinHandler").w("No physical controller vibrator found, falling back to device vibration.");
             Vibrator phoneVibrator = (Vibrator) activity.getSystemService(Context.VIBRATOR_SERVICE);
             if (phoneVibrator != null && phoneVibrator.hasVibrator()) {
                 int finalPhoneAmplitude = getPhoneRumbleAmplitude(amplitude);
@@ -1047,9 +1046,9 @@ public class WinHandler {
         if (slot >= 0) {
             ExternalController controller = getControllerFromSlot(slot);
             if (!isEventFromController(controller, event.getDeviceId())) {
-                Log.d(TAG, "Motion event refresh for deviceId=" + event.getDeviceId()
-                        + " slot=" + slot
-                        + " controller=" + (controller != null ? controller.getDeviceId() : -1));
+                // Format args (not string concat): nothing is built when logging is off.
+                Timber.tag(TAG).d("Motion event refresh for deviceId=%d slot=%d controller=%d",
+                        event.getDeviceId(), slot, controller != null ? controller.getDeviceId() : -1);
                 refreshControllerMappings();
                 controller = getControllerFromSlot(slot);
             }
@@ -1106,21 +1105,18 @@ public class WinHandler {
         if (slot >= 0) {
             ExternalController controller = getControllerFromSlot(slot);
             if (!isEventFromController(controller, event.getDeviceId())) {
-                Log.d(TAG, "Key event refresh for deviceId=" + event.getDeviceId()
-                        + " slot=" + slot
-                        + " controller=" + (controller != null ? controller.getDeviceId() : -1));
+                Timber.tag(TAG).d("Key event refresh for deviceId=%d slot=%d controller=%d",
+                        event.getDeviceId(), slot, controller != null ? controller.getDeviceId() : -1);
                 refreshControllerMappings();
                 controller = getControllerFromSlot(slot);
             }
             if (isEventFromController(controller, event.getDeviceId())) {
                 if (event.getRepeatCount() > 0) return true;
                 handled = controller.updateStateFromKeyEvent(event); // or motion variant
-                Log.d(TAG, "Key routed deviceId=" + event.getDeviceId()
-                        + " keyCode=" + event.getKeyCode()
-                        + " action=" + event.getAction()
-                        + " -> P" + (slot + 1)
-                        + " handled=" + handled
-                        + " buffer=" + (getGamepadBuffer(slot) != null));
+                // Runs on every routed key event: format args keep it allocation-light when logging is off.
+                Timber.tag(TAG).d("Key routed deviceId=%d keyCode=%d action=%d -> P%d handled=%b buffer=%b",
+                        event.getDeviceId(), event.getKeyCode(), event.getAction(), slot + 1, handled,
+                        getGamepadBuffer(slot) != null);
                 sendMemoryFileState(controller, getGamepadBuffer(slot), slot);
                 if (handled) sendGamepadState();
                 return handled;

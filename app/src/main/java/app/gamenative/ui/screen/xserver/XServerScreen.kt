@@ -9,7 +9,6 @@ import android.os.SystemClock
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.util.Log
 import android.view.Display
 import android.view.Gravity
 import android.view.KeyEvent
@@ -5360,19 +5359,19 @@ private fun extractArm64ecInputDLLs(context: Context, container: Container) {
     val inputAsset = "arm64ec_input_dlls.tzst"
     val imageFs = ImageFs.find(context)
     val wineVersion: String? = container.getWineVersion()
-    Log.d("XServerDisplayActivity", "arm64ec Input DLL Extraction Verification: Container Wine version: " + wineVersion)
+    Timber.tag("XServerDisplayActivity").d("arm64ec Input DLL Extraction Verification: Container Wine version: " + wineVersion)
 
     // Check if the wineVersion string is not null and contains "arm64ec"
     if (wineVersion != null && wineVersion.contains("proton-9.0-arm64ec")) {
         val wineFolder: File = File(imageFs.getWinePath() + "/lib/wine/")
-        Log.d("XServerDisplayActivity", "Wine version contains arm64ec. Extracting input dlls to " + wineFolder.getPath())
+        Timber.tag("XServerDisplayActivity").d("Wine version contains arm64ec. Extracting input dlls to " + wineFolder.getPath())
         val success: Boolean = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, context.assets, inputAsset, wineFolder)
         if (!success) {
-            Log.d("XServerDisplayActivity", "Failed to extract input dlls")
+            Timber.tag("XServerDisplayActivity").d("Failed to extract input dlls")
         }
     } else {
         // Updated log message for clarity
-        Log.d("XServerDisplayActivity", "Wine version is not arm64ec, skipping input dlls extraction.")
+        Timber.tag("XServerDisplayActivity").d("Wine version is not arm64ec, skipping input dlls extraction.")
     }
 }
 
@@ -5380,11 +5379,11 @@ private fun extractx86_64InputDlls(context: Context, container: Container) {
     val inputAsset = "x86_64_input_dlls.tzst"
     val imageFs = ImageFs.find(context)
     val wineVersion: String? = container.getWineVersion()
-    Log.d("XServerDisplayActivity", "x86_64 Input DLL Extraction Verification: Container Wine version: " + wineVersion)
+    Timber.tag("XServerDisplayActivity").d("x86_64 Input DLL Extraction Verification: Container Wine version: " + wineVersion)
     if ("proton-9.0-x86_64" == wineVersion) {
         val wineFolder: File = File(imageFs.getWinePath() + "/lib/wine/")
-        Log.d("XServerDisplayActivity", "Extracting input dlls to " + wineFolder.getPath())
-    } else Log.d("XServerDisplayActivity", "Wine version is not proton-9.0-x86_64, skipping input dlls extraction")
+        Timber.tag("XServerDisplayActivity").d("Extracting input dlls to " + wineFolder.getPath())
+    } else Timber.tag("XServerDisplayActivity").d("Wine version is not proton-9.0-x86_64, skipping input dlls extraction")
 }
 
 private suspend fun setupWineSystemFiles(
@@ -6144,7 +6143,7 @@ private suspend fun extractGraphicsDriverFiles(
 
         adrenoToolsDriverId =
             if (selectedDriverVersion!!.contains(DefaultVersion.WRAPPER)) DefaultVersion.WRAPPER else selectedDriverVersion
-        Log.d("GraphicsDriverExtraction", "Adrenotools DriverID: " + adrenoToolsDriverId)
+        Timber.tag("GraphicsDriverExtraction").d("Adrenotools DriverID: " + adrenoToolsDriverId)
 
         val rootDir: File? = imageFs.getRootDir()
 
@@ -6189,7 +6188,7 @@ private suspend fun extractGraphicsDriverFiles(
             // We only extract if the selection is actually a wrapper file.
             if (mainWrapperSelection.lowercase(Locale.getDefault()).startsWith("wrapper")) {
                 val wrapperComponentId = mainWrapperSelection.lowercase(Locale.getDefault())
-                Log.d("GraphicsDriverExtraction", "WRAPPER selection changed or first boot. Extracting: $wrapperComponentId")
+                Timber.tag("GraphicsDriverExtraction").d("WRAPPER selection changed or first boot. Extracting: $wrapperComponentId")
                 try {
                     val wrapperContentsManager = ContentsManager(context)
                     val wrapperProfile: ContentProfile? =
@@ -6209,7 +6208,7 @@ private suspend fun extractGraphicsDriverFiles(
                         e,
                     )
                 }
-                Log.d("XServerDisplayActivity", "First time container boot, extracting extra_libs.tzst")
+                Timber.tag("XServerDisplayActivity").d("First time container boot, extracting extra_libs.tzst")
                 extractGraphicsDriverComponent(context, "extra_libs", rootDir!!)
                 val renderer = GPUInformation.getRenderer(null, null)
                 if (container.wineVersion.contains("arm64ec") && renderer?.contains("Mali") != true) {

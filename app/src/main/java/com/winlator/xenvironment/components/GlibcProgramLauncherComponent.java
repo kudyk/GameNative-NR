@@ -5,8 +5,6 @@ import static com.winlator.core.ProcessHelper.splitCommand;
 import android.content.Context;
 import android.media.Image;
 import android.os.Process;
-import android.util.Log;
-
 import app.gamenative.BuildConfig;
 import com.winlator.PrefManager;
 import com.winlator.box86_64.Box86_64Preset;
@@ -36,6 +34,7 @@ import java.util.List;
 import app.gamenative.PluviaApp;
 import app.gamenative.events.AndroidEvent;
 import app.gamenative.service.SteamService;
+import timber.log.Timber;
 
 public class GlibcProgramLauncherComponent extends GuestProgramLauncherComponent {
     private String guestExecutable;
@@ -67,25 +66,25 @@ public class GlibcProgramLauncherComponent extends GuestProgramLauncherComponent
     public void setPreUnpack(Runnable r) { this.preUnpack = r; }
     @Override
     public void start() {
-        Log.d("GlibcProgramLauncherComponent", "Starting...");
+        Timber.tag("GlibcProgramLauncherComponent").d("Starting...");
         synchronized (lock) {
             stop();
             extractBox64Files();
             copyDefaultBox64RCFile();
             if (preUnpack != null) preUnpack.run();
             pid = execGuestProgram();
-            Log.d("GlibcProgramLauncherComponent", "Process " + pid + " started");
+            Timber.tag("GlibcProgramLauncherComponent").d("Process " + pid + " started");
             SteamService.setKeepAlive(true);
         }
     }
 
     @Override
     public void stop() {
-        Log.d("GlibcProgramLauncherComponent", "Stopping...");
+        Timber.tag("GlibcProgramLauncherComponent").d("Stopping...");
         synchronized (lock) {
             if (pid != -1) {
                 Process.killProcess(pid);
-                Log.d("GlibcProgramLauncherComponent", "Stopped process " + pid);
+                Timber.tag("GlibcProgramLauncherComponent").d("Stopped process " + pid);
                 pid = -1;
                 List<ProcessHelper.ProcessInfo> subProcesses = ProcessHelper.listSubProcesses();
                 for (ProcessHelper.ProcessInfo subProcess : subProcesses) {
@@ -215,10 +214,10 @@ public class GlibcProgramLauncherComponent extends GuestProgramLauncherComponent
                 if (ldPreload.length() > 0) ldPreload.append(" ");
                 ldPreload.append(sysvshm64.getPath());
             }
-            Log.d("GlibcProgramLauncherComponent", "Setting LD_PRELOAD=" + ldPreload);
+            Timber.tag("GlibcProgramLauncherComponent").d("Setting LD_PRELOAD=" + ldPreload);
             envVars.put("LD_PRELOAD", ldPreload.toString());
         } else {
-            Log.w("GlibcProgramLauncherComponent", "Neither libredirect.so nor libandroid-sysvshm.so found in " + glibc64Dir.getPath());
+            Timber.tag("GlibcProgramLauncherComponent").w("Neither libredirect.so nor libandroid-sysvshm.so found in " + glibc64Dir.getPath());
         }
         envVars.put("WINEESYNC_WINLATOR", "1");
         if (this.envVars != null) envVars.putAll(this.envVars);
@@ -227,13 +226,13 @@ public class GlibcProgramLauncherComponent extends GuestProgramLauncherComponent
 
         // Check if box64 exists and log its details before executing
         File box64File = new File(box64Path);
-        Log.d("GlibcProgramLauncherComponent", "About to execute box64 from: " + box64Path);
+        Timber.tag("GlibcProgramLauncherComponent").d("About to execute box64 from: " + box64Path);
 
         String command = box64Path + " " + guestExecutable;
-        Log.d("GlibcProgramLauncherComponent", "Final command: " + command);
+        Timber.tag("GlibcProgramLauncherComponent").d("Final command: " + command);
 
         return ProcessHelper.exec(command, envVars.toStringArray(), workingDir != null ? workingDir : rootDir, (status) -> {
-            Log.d("GlibcProgramLauncherComponent", "Process terminated " + pid + " with status " + status);
+            Timber.tag("GlibcProgramLauncherComponent").d("Process terminated " + pid + " with status " + status);
             synchronized (lock) {
                 pid = -1;
             }
@@ -255,7 +254,7 @@ public class GlibcProgramLauncherComponent extends GuestProgramLauncherComponent
             contentsManager.applyContent(profile);
         }
         else {
-            Log.d("Extraction", "exctracting box64 with box64Version " + box64Version);
+            Timber.tag("Extraction").d("exctracting box64 with box64Version " + box64Version);
             TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, context.getAssets(), "box86_64/box64-" + box64Version + ".tzst", rootDir);
         }
         PrefManager.putString("current_box64_version", box64Version);
@@ -323,10 +322,10 @@ public class GlibcProgramLauncherComponent extends GuestProgramLauncherComponent
                 if (ldPreload.length() > 0) ldPreload.append(" ");
                 ldPreload.append(sysvshm64.getPath());
             }
-            Log.d("GlibcProgramLauncherComponent", "Shell LD_PRELOAD=" + ldPreload);
+            Timber.tag("GlibcProgramLauncherComponent").d("Shell LD_PRELOAD=" + ldPreload);
             envVars.put("LD_PRELOAD", ldPreload.toString());
         } else {
-            Log.w("GlibcProgramLauncherComponent", "Shell: neither libredirect.so nor libandroid-sysvshm.so found in " + glibc64Dir.getPath());
+            Timber.tag("GlibcProgramLauncherComponent").w("Shell: neither libredirect.so nor libandroid-sysvshm.so found in " + glibc64Dir.getPath());
         }
         envVars.put("WINEESYNC_WINLATOR", "1");
         if (this.envVars != null) envVars.putAll(this.envVars);
@@ -336,7 +335,7 @@ public class GlibcProgramLauncherComponent extends GuestProgramLauncherComponent
         String finalCommand = box64Path + " " + command;
 
         // Execute the command and capture its output
-        Log.d("GlibcProgramLauncherComponent", "Shell command is " + finalCommand);
+        Timber.tag("GlibcProgramLauncherComponent").d("Shell command is " + finalCommand);
         return ProcessHelper.execWithOutput(finalCommand, envVars.toStringArray(),
                 workingDir != null ? workingDir : imageFs.getRootDir(), includeStderr);
     }

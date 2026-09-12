@@ -123,6 +123,7 @@ import app.gamenative.utils.SteamUtils
 import com.posthog.PostHog
 import kotlinx.coroutines.launch
 import android.os.SystemClock
+import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1540,7 +1541,7 @@ private fun Preview_LibraryScreenContent() {
             onPageChange = { },
             onModalBottomSheet = {
                 val currentState = state.modalBottomSheet
-                println("State: $currentState")
+                Timber.d("State: $currentState")
                 state = state.copy(modalBottomSheet = !currentState)
             },
             onClickPlay = { _, _ -> },

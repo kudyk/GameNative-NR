@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import timber.log.Timber;
 
 public class RCFile implements Comparable<RCFile> {
     public final int id;
@@ -68,7 +69,7 @@ public class RCFile implements Comparable<RCFile> {
         try {
             FileUtils.writeString(file, this.toJson().toString());
         } catch (JSONException e) {
-            e.printStackTrace();
+            Timber.e(e);
         }
     }
 

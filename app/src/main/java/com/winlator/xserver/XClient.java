@@ -10,6 +10,7 @@ import com.winlator.xserver.extensions.XInput2Extension;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import timber.log.Timber;
 
 public class XClient implements XResourceManager.OnResourceLifecycleListener {
     public final XServer xServer;
@@ -57,7 +58,7 @@ public class XClient implements XResourceManager.OnResourceLifecycleListener {
             event.send(sequenceNumber, outputStream);
         }
         catch (IOException e) {
-            e.printStackTrace();
+            Timber.e(e);
         }
     }
 

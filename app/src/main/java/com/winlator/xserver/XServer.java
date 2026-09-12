@@ -1,7 +1,6 @@
 package com.winlator.xserver;
 
 import android.graphics.Rect;
-import android.util.Log;
 import android.util.SparseArray;
 
 import com.winlator.math.Mathf;
@@ -20,6 +19,7 @@ import com.winlator.xserver.extensions.XInput2Extension;
 import java.nio.charset.Charset;
 import java.util.EnumMap;
 import java.util.concurrent.locks.ReentrantLock;
+import timber.log.Timber;
 
 public class XServer {
     public enum Lockable {WINDOW_MANAGER, PIXMAP_MANAGER, DRAWABLE_MANAGER, GRAPHIC_CONTEXT_MANAGER, INPUT_DEVICE, CURSOR_MANAGER, SHMSEGMENT_MANAGER}
@@ -56,7 +56,7 @@ public class XServer {
     }
 
     public XServer(ScreenInfo screenInfo, boolean useGlibcContainer, boolean mouseDragCompatibilityEnabled) {
-        Log.d("XServer", "Creating xServer " + screenInfo);
+        Timber.tag("XServer").d("Creating xServer " + screenInfo);
         this.screenInfo = screenInfo;
         for (Lockable lockable : Lockable.values()) locks.put(lockable, new ReentrantLock());
 

@@ -2,8 +2,6 @@ package com.winlator.container;
 
 import android.content.Context;
 import android.os.Handler;
-import android.util.Log;
-
 // import com.winlator.R;
 import app.gamenative.R;
 import app.gamenative.utils.downloader.ContainerFilesDownloaderKt;
@@ -28,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import timber.log.Timber;
 
 public class ContainerManager {
     private final ArrayList<Container> containers = new ArrayList<>();
@@ -61,7 +60,7 @@ public class ContainerManager {
                             String configContent = FileUtils.readString(configFile);
 
                             if (configContent == null || configContent.trim().isEmpty()) {
-                                Log.w("ContainerManager", "Container config file is null or empty, skipping: " + containerId);
+                                Timber.tag("ContainerManager").w("Container config file is null or empty, skipping: " + containerId);
                                 continue;
                             }
 
@@ -70,7 +69,7 @@ public class ContainerManager {
                             containers.add(container);
                         } catch (Exception e) {
                             // Catch ALL exceptions (NullPointerException, JSONException, etc.)
-                            Log.w("ContainerManager", "Could not load container " + containerId + ": " + e.getMessage());
+                            Timber.tag("ContainerManager").w("Could not load container " + containerId + ": " + e.getMessage());
                             // Continue loading other containers
                         }
                     }
@@ -130,7 +129,7 @@ public class ContainerManager {
 
             boolean thin = ContainerOverlay.isEligible(container) && createThinPrefix(container, contentsManager);
             if (!thin && !extractContainerPatternFile(container.getWineVersion(), contentsManager, containerDir, null)) {
-                Log.w("Container Manager", "Failed to extract container pattern, deleting container directory...");
+                Timber.tag("Container Manager").w("Failed to extract container pattern, deleting container directory...");
                 FileUtils.delete(containerDir);
                 return null;
             }
@@ -140,7 +139,7 @@ public class ContainerManager {
             return container;
         }
         catch (JSONException e) {
-            Log.e("ContainerManager", "Failed to create container: " + e);
+            Timber.tag("ContainerManager").e("Failed to create container: " + e);
         }
         return null;
     }
@@ -153,7 +152,7 @@ public class ContainerManager {
             container.setBasePrefix(ContainerOverlay.canonicalHostPath(baseWine));
             return true;
         }
-        Log.w("ContainerManager", "Thin prefix creation failed, using a full prefix for " + container.id);
+        Timber.tag("ContainerManager").w("Thin prefix creation failed, using a full prefix for " + container.id);
         FileUtils.delete(wineDir);
         return false;
     }
@@ -273,7 +272,7 @@ public class ContainerManager {
             return TarCompressorUtils.extract(TarCompressorUtils.Type.XZ, txzFile, destinationDir);
         }
 
-        Log.d("ContainerManager", "No prefixPack found, returning false");
+        Timber.tag("ContainerManager").d("No prefixPack found, returning false");
         return false;
     }
 
@@ -291,7 +290,7 @@ public class ContainerManager {
                     ".wine/drive_c/windows/" + dstName + "/" + dlname);
 
             // Delete if present
-            Log.d("Extraction", "Attempting to delete: " + targetFile.getPath());
+            Timber.tag("Extraction").d("Attempting to delete: " + targetFile.getPath());
             if (targetFile.exists()) {
                 //noinspection ResultOfMethodCallIgnored  // intentional, we don't care about the boolean
                 targetFile.delete();
@@ -315,7 +314,7 @@ public class ContainerManager {
     }
 
     private void extractCommonDlls(WineInfo wineInfo, String srcName, String dstName, File containerDir, OnExtractFileListener onExtractFileListener) throws JSONException {
-        Log.d("Extraction", "extracting common dlls for bionic: " + srcName);
+        Timber.tag("Extraction").d("extracting common dlls for bionic: " + srcName);
         File srcDir = new File(wineInfo.path + "/lib/wine/" + srcName);
 
         File[] srcfiles = srcDir.listFiles(file -> file.isFile());
@@ -327,11 +326,11 @@ public class ContainerManager {
             File dstFile = new File(containerDir, ".wine/drive_c/windows/" + dstName + "/" + dllName);
             if (dstFile.exists()) continue;
             if (onExtractFileListener != null ) {
-                Log.d("Extraction", "extracting " + dstFile);
+                Timber.tag("Extraction").d("extracting " + dstFile);
                 dstFile = onExtractFileListener.onExtractFile(dstFile, 0);
                 if (dstFile == null) continue;
             }
-            Log.d("Extraction", "linking " + file + " to " + dstFile);
+            Timber.tag("Extraction").d("linking " + file + " to " + dstFile);
             FileUtils.copy(file, dstFile);
         }
     }
@@ -348,7 +347,7 @@ public class ContainerManager {
         File parentDir = expectedWfm.getParentFile();
         if (parentDir == null ||
                 (!parentDir.isDirectory() && !parentDir.mkdirs() && !parentDir.isDirectory())) {
-            Log.e("Extraction", "Failed to create WFM destination directory");
+            Timber.tag("Extraction").e("Failed to create WFM destination directory");
             return false;
         }
         final File[] selectedWfm = {null};
@@ -364,19 +363,19 @@ public class ContainerManager {
     }
 
     private boolean extractContainerPatternCommonArchive(File containerDir, OnExtractFileListener onExtractFileListener) {
-        Log.d("Extraction", "extracting container_pattern_common.tzst");
+        Timber.tag("Extraction").d("extracting container_pattern_common.tzst");
         File componentFile = ContainerFilesDownloaderKt.ensureContainerFileAvailableBlocking(context, "container_pattern_common", new ProgressCallback() {
             @Override
             public void onProgress(float progress) {
-                Log.d("Extraction", "Downloading container_pattern_common: " + (int)(progress * 100) + "%");
+                Timber.tag("Extraction").d("Downloading container_pattern_common: " + (int)(progress * 100) + "%");
             }
         });
 
         if (componentFile == null) {
-            Log.d("Extraction", "Using bundled asset for container_pattern_common");
+            Timber.tag("Extraction").d("Using bundled asset for container_pattern_common");
             return SharedComponents.extractAndLink(context, "container_pattern_common", TarCompressorUtils.Type.ZSTD, "container_pattern_common.tzst", containerDir, onExtractFileListener);
         } else {
-            Log.d("Extraction", "Using downloaded file for container_pattern_common: " + componentFile.getAbsolutePath());
+            Timber.tag("Extraction").d("Using downloaded file for container_pattern_common: " + componentFile.getAbsolutePath());
             return SharedComponents.extractAndLink(context, "container_pattern_common", TarCompressorUtils.Type.ZSTD, componentFile, containerDir, onExtractFileListener);
         }
     }
@@ -384,19 +383,19 @@ public class ContainerManager {
     public boolean extractContainerPatternFile(String wineVersion, ContentsManager contentsManager, File containerDir, OnExtractFileListener onExtractFileListener) {
         WineInfo wineInfo = WineInfo.fromIdentifier(context, contentsManager, wineVersion);
         if (WineInfo.isMainWineVersion(wineVersion)) {
-            Log.d("Extraction", "extracting container_pattern_gamenative.tzst");
+            Timber.tag("Extraction").d("extracting container_pattern_gamenative.tzst");
             File componentFile = ContainerFilesDownloaderKt.ensureContainerFileAvailableBlocking(context, "container_pattern_gamenative", new ProgressCallback() {
                 @Override
                 public void onProgress(float progress) {
-                    Log.d("Extraction", "Downloading container_pattern_gamenative: " + (int)(progress * 100) + "%");
+                    Timber.tag("Extraction").d("Downloading container_pattern_gamenative: " + (int)(progress * 100) + "%");
                 }
             });
             boolean result;
             if (componentFile == null) {
-                Log.d("Extraction", "Using bundled asset for container_pattern_gamenative");
+                Timber.tag("Extraction").d("Using bundled asset for container_pattern_gamenative");
                 result = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, context.getAssets(), "container_pattern_gamenative.tzst", containerDir, onExtractFileListener);
             } else {
-                Log.d("Extraction", "Using downloaded file for container_pattern_gamenative: " + componentFile.getAbsolutePath());
+                Timber.tag("Extraction").d("Using downloaded file for container_pattern_gamenative: " + componentFile.getAbsolutePath());
                 result = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, componentFile, containerDir, onExtractFileListener);
             }
 
@@ -424,26 +423,26 @@ public class ContainerManager {
             }
             String containerPatternId = wineVersion + "_container_pattern";
             String containerPattern = containerPatternId + ".tzst";
-            Log.d("Extraction", "extracting " + containerPattern);
+            Timber.tag("Extraction").d("extracting " + containerPattern);
             boolean result = false;
 
             try {
                 File componentFile = ContainerFilesDownloaderKt.ensureContainerFileAvailableBlocking(context, containerPatternId, new ProgressCallback() {
                     @Override
                     public void onProgress(float progress) {
-                        Log.d("Extraction", "Downloading " + containerPatternId + ": " + (int)(progress * 100) + "%");
+                        Timber.tag("Extraction").d("Downloading " + containerPatternId + ": " + (int)(progress * 100) + "%");
                     }
                 });
 
                 if (componentFile == null) {
-                    Log.d("Extraction", "Using bundled asset for " + containerPatternId);
+                    Timber.tag("Extraction").d("Using bundled asset for " + containerPatternId);
                     result = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, context, containerPattern, containerDir, onExtractFileListener);
                 } else {
-                    Log.d("Extraction", "Using downloaded file for " + containerPatternId + ": " + componentFile.getAbsolutePath());
+                    Timber.tag("Extraction").d("Using downloaded file for " + containerPatternId + ": " + componentFile.getAbsolutePath());
                     result = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, componentFile, containerDir, onExtractFileListener);
                 }
             } catch (Exception e) {
-                Log.w("Extraction", "Failed to download/extract " + containerPatternId + ": " + e.getMessage() + ", trying prefix pack");
+                Timber.tag("Extraction").w("Failed to download/extract " + containerPatternId + ": " + e.getMessage() + ", trying prefix pack");
             }
 
             if (!result) {

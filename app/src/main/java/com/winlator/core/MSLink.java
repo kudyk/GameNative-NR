@@ -5,6 +5,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import timber.log.Timber;
 
 public abstract class MSLink {
     public static final byte SW_SHOWNORMAL = 1;
@@ -166,7 +167,7 @@ public abstract class MSLink {
             if (StringData.length > 0) os.write(StringData);
         }
         catch (IOException e) {
-            e.printStackTrace();
+            Timber.e(e);
         }
     }
 }

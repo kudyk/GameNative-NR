@@ -262,7 +262,7 @@ class SteamTokenLogin(
                         }
                     } catch (e: Exception) {
                         Timber.tag("SteamTokenLogin").d("An unexpected error occurred: ${e.message}")
-                        e.printStackTrace()
+                        Timber.e(e)
                     }
                 }
             }
@@ -280,7 +280,7 @@ class SteamTokenLogin(
             FileUtils.chmod(File(localSteamDir.absolutePathString(), "local.vdf"), 505) // 0771
         } catch (e: Exception) {
             Timber.tag("SteamTokenLogin").d("An unexpected error occurred: ${e.message}")
-            e.printStackTrace()
+            Timber.e(e)
         }
     }
 }

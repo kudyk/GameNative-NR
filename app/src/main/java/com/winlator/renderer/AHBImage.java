@@ -3,6 +3,7 @@ package com.winlator.renderer;
 import androidx.annotation.Keep;
 
 import java.nio.ByteBuffer;
+import timber.log.Timber;
 
 public class AHBImage extends NativeTexture {
     private long hardwareBufferPtr;
@@ -26,7 +27,7 @@ public class AHBImage extends NativeTexture {
     public AHBImage(short width, short height) {
         hardwareBufferPtr = createHardwareBuffer(width, height);
         if (hardwareBufferPtr == 0) {
-            System.err.println("Error: Failed to create hardware buffer");
+            Timber.e("Error: Failed to create hardware buffer");
             return;
         }
 
@@ -35,7 +36,7 @@ public class AHBImage extends NativeTexture {
         this.height = nativeGetHeight(hardwareBufferPtr);
 
         if (virtualData == null) {
-            System.err.println("Error: Failed to lock hardware buffer");
+            Timber.e("Error: Failed to lock hardware buffer");
             destroyHardwareBuffer(hardwareBufferPtr);
             hardwareBufferPtr = 0;
             return;
@@ -48,7 +49,7 @@ public class AHBImage extends NativeTexture {
         }
 
         if (!swapchainOk) {
-            System.err.println("Error: Failed to create CPU scanout swapchain");
+            Timber.e("Error: Failed to create CPU scanout swapchain");
             for (int i = 0; i < swapchainAhbs.length; i++) {
                 if (swapchainAhbs[i] != 0) {
                     destroyHardwareBuffer(swapchainAhbs[i]);
@@ -64,7 +65,7 @@ public class AHBImage extends NativeTexture {
             width = nativeGetWidth(hardwareBufferPtr);
             height = nativeGetHeight(hardwareBufferPtr);
         } else {
-            System.err.println("Error: Failed to create hardware buffer");
+            Timber.e("Error: Failed to create hardware buffer");
         }
     }
 

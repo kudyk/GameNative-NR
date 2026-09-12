@@ -1,7 +1,6 @@
 package com.winlator.container;
 
 import android.content.Context;
-import android.util.Log;
 
 import com.winlator.contents.ContentsManager;
 import com.winlator.core.FileUtils;
@@ -14,6 +13,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
+import timber.log.Timber;
 
 public final class BasePrefix {
     private static final String TAG = "BasePrefix";
@@ -50,7 +50,7 @@ public final class BasePrefix {
     public static File ensure(Context context, ContentsManager contentsManager, String wineVersion) {
         File baseDir = getBaseDir(context, contentsManager, wineVersion);
         if (baseDir == null) {
-            Log.w(TAG, "No base prefix location for wine version " + wineVersion);
+            Timber.tag(TAG).w("No base prefix location for wine version " + wineVersion);
             return null;
         }
         int imgVersion = ImageFs.find(context).getVersion();
@@ -61,15 +61,15 @@ public final class BasePrefix {
             for (int legacyVersion : LEGACY_BUILD_VERSIONS) {
                 String legacyIdentity = legacyVersion + ":" + wineVersion + ":" + imgVersion;
                 if (upgradeLegacyBase(baseDir, legacyIdentity, identity)) {
-                    Log.i(TAG, "Normalized the existing base for " + wineVersion + " from version " + legacyVersion);
+                    Timber.tag(TAG).i("Normalized the existing base for " + wineVersion + " from version " + legacyVersion);
                     return wineDir;
                 }
             }
             ContainerOverlay.splash("Preparing " + wineVersion + " base...");
-            Log.i(TAG, "Building base prefix for " + wineVersion + " at " + baseDir);
+            Timber.tag(TAG).i("Building base prefix for " + wineVersion + " at " + baseDir);
             if (build(context, contentsManager, wineVersion, baseDir, identity)) return wineDir;
             if (wineDir.isDirectory() && new File(baseDir, COMPLETE_MARKER).isFile()) {
-                Log.w(TAG, "Base prefix rebuild failed for " + wineVersion + ", keeping the previous base");
+                Timber.tag(TAG).w("Base prefix rebuild failed for " + wineVersion + ", keeping the previous base");
                 return wineDir;
             }
             return null;
@@ -115,7 +115,7 @@ public final class BasePrefix {
             return true;
         }
         catch (java.io.IOException e) {
-            Log.w(TAG, "Could not point z: at / in " + wineDir + ": " + e);
+            Timber.tag(TAG).w("Could not point z: at / in " + wineDir + ": " + e);
             return false;
         }
     }
@@ -129,7 +129,7 @@ public final class BasePrefix {
                 Files.delete(file.toPath());
             }
             catch (IOException e) {
-                Log.w(TAG, "Failed to remove " + file + ": " + e);
+                Timber.tag(TAG).w("Failed to remove " + file + ": " + e);
                 ok = false;
             }
         }
@@ -143,12 +143,12 @@ public final class BasePrefix {
         File oldDir = new File(baseDir, OLD_DIR);
         try {
             if (!baseDir.getParentFile().isDirectory()) {
-                Log.e(TAG, "Wine content for " + wineVersion + " is missing at " + baseDir.getParentFile());
+                Timber.tag(TAG).e("Wine content for " + wineVersion + " is missing at " + baseDir.getParentFile());
                 return false;
             }
             if (!baseDir.isDirectory() && !baseDir.mkdir()) return false;
             if (!FileUtils.writeString(building, identity)) {
-                Log.e(TAG, "Failed to write the build marker at " + building);
+                Timber.tag(TAG).e("Failed to write the build marker at " + building);
                 return false;
             }
             FileUtils.delete(staging);
@@ -157,7 +157,7 @@ public final class BasePrefix {
             File stagingWine = new File(staging, ".wine");
             ContainerManager containerManager = new ContainerManager(context);
             if (!containerManager.extractContainerPatternFile(wineVersion, contentsManager, staging, null)) {
-                Log.e(TAG, "Failed to extract the container pattern for " + wineVersion);
+                Timber.tag(TAG).e("Failed to extract the container pattern for " + wineVersion);
                 FileUtils.delete(staging);
                 building.delete();
                 if (!wineDir.exists()) baseDir.delete();
@@ -172,12 +172,12 @@ public final class BasePrefix {
                 return new File(stagingWine, path.substring(commonPrefix.length()));
             };
             if (!containerManager.extractContainerPatternCommon(staging, commonRemap)) {
-                Log.w(TAG, "Failed to extract container_pattern_common into the base for " + wineVersion);
+                Timber.tag(TAG).w("Failed to extract container_pattern_common into the base for " + wineVersion);
             }
             FileUtils.delete(new File(staging, "home"));
 
             if (!new File(stagingWine, "drive_c/windows").isDirectory()) {
-                Log.e(TAG, "Base prefix for " + wineVersion + " has no drive_c/windows");
+                Timber.tag(TAG).e("Base prefix for " + wineVersion + " has no drive_c/windows");
                 FileUtils.delete(staging);
                 building.delete();
                 if (!wineDir.exists()) baseDir.delete();
@@ -187,14 +187,14 @@ public final class BasePrefix {
 
             FileUtils.delete(oldDir);
             if (wineDir.exists() && !wineDir.renameTo(oldDir)) {
-                Log.e(TAG, "Failed to move the previous base aside at " + wineDir);
+                Timber.tag(TAG).e("Failed to move the previous base aside at " + wineDir);
                 FileUtils.delete(staging);
                 building.delete();
                 if (!wineDir.exists()) baseDir.delete();
                 return false;
             }
             if (!stagingWine.renameTo(wineDir)) {
-                Log.e(TAG, "Failed to install the base prefix at " + wineDir);
+                Timber.tag(TAG).e("Failed to install the base prefix at " + wineDir);
                 if (oldDir.exists()) oldDir.renameTo(wineDir);
                 FileUtils.delete(staging);
                 building.delete();
@@ -205,11 +205,11 @@ public final class BasePrefix {
             building.delete();
             FileUtils.delete(oldDir);
             FileUtils.delete(staging);
-            Log.i(TAG, "Base prefix ready for " + wineVersion);
+            Timber.tag(TAG).i("Base prefix ready for " + wineVersion);
             return true;
         }
         catch (Throwable t) {
-            Log.e(TAG, "Base prefix build failed for " + wineVersion, t);
+            Timber.tag(TAG).e(t, "Base prefix build failed for " + wineVersion);
             FileUtils.delete(staging);
             building.delete();
             return false;

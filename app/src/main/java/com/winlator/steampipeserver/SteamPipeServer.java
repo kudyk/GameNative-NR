@@ -1,6 +1,5 @@
 package com.winlator.steampipeserver;
 
-import android.util.Log;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -10,6 +9,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import timber.log.Timber;
 
 public class SteamPipeServer {
     private static final int PORT = 34865;
@@ -32,7 +32,7 @@ public class SteamPipeServer {
                 serverSocket = new ServerSocket();
                 serverSocket.setReuseAddress(true);
                 serverSocket.bind(new InetSocketAddress(PORT));
-                Log.d("SteamPipeServer", "Server started on port " + PORT);
+                Timber.tag("SteamPipeServer").d("Server started on port " + PORT);
 
                 while (running) {
                     Socket clientSocket = serverSocket.accept();
@@ -41,7 +41,7 @@ public class SteamPipeServer {
                     handleClient(clientSocket);
                 }
             } catch (IOException e) {
-                Log.e("SteamPipeServer", "Server error", e);
+                Timber.tag("SteamPipeServer").e(e, "Server error");
             }
         }).start();
     }
@@ -61,40 +61,40 @@ public class SteamPipeServer {
 
                         switch (messageType) {
                             case RequestCodes.MSG_INIT:
-                                Log.d("SteamPipeServer", "Received MSG_INIT");
+                                Timber.tag("SteamPipeServer").d("Received MSG_INIT");
                                 writeNetworkInt(output, 1);
                                 output.flush();
                                 break;
                             case RequestCodes.MSG_SHUTDOWN:
-                                Log.d("SteamPipeServer", "Received MSG_SHUTDOWN");
+                                Timber.tag("SteamPipeServer").d("Received MSG_SHUTDOWN");
                                 clientSocket.close();
                                 break;
                             case RequestCodes.MSG_RESTART_APP:
-                                Log.d("SteamPipeServer", "Received MSG_RESTART_APP");
+                                Timber.tag("SteamPipeServer").d("Received MSG_RESTART_APP");
                                 int appId = input.readInt();
                                 writeNetworkInt(output, 0); // Send restart not needed
                                 break;
                             case RequestCodes.MSG_IS_RUNNING:
-                                Log.d("SteamPipeServer", "Received MSG_IS_RUNNING");
+                                Timber.tag("SteamPipeServer").d("Received MSG_IS_RUNNING");
                                 writeNetworkInt(output, 1); // Send Steam running status
                                 break;
                             case RequestCodes.MSG_REGISTER_CALLBACK:
-                                Log.d("SteamPipeServer", "Received MSG_REGISTER_CALLBACK");
+                                Timber.tag("SteamPipeServer").d("Received MSG_REGISTER_CALLBACK");
                                 break;
                             case RequestCodes.MSG_UNREGISTER_CALLBACK:
-                                Log.d("SteamPipeServer", "Received MSG_UNREGISTER_CALLBACK");
+                                Timber.tag("SteamPipeServer").d("Received MSG_UNREGISTER_CALLBACK");
                                 break;
                             case RequestCodes.MSG_RUN_CALLBACKS:
-                                Log.d("SteamPipeServer", "Received MSG_RUN_CALLBACKS");
+                                Timber.tag("SteamPipeServer").d("Received MSG_RUN_CALLBACKS");
                                 break;
                             default:
-                                Log.w("SteamPipeServer", "Unknown message type: " + messageType);
+                                Timber.tag("SteamPipeServer").w("Unknown message type: " + messageType);
                                 break;
                         }
                     }
                 }
             } catch (IOException e) {
-                Log.e("SteamPipeServer", "Client handler error", e);
+                Timber.tag("SteamPipeServer").e(e, "Client handler error");
             }
         }).start();
     }
@@ -106,7 +106,7 @@ public class SteamPipeServer {
                 serverSocket.close();
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            Timber.e(e);
         }
     }
 }

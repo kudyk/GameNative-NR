@@ -3,7 +3,6 @@ package com.winlator.widget;
 import android.content.Context;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.StateListDrawable;
-import android.util.Log;
 import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.View;
@@ -1767,7 +1766,7 @@ public class TouchpadView extends View implements View.OnCapturedPointerListener
             return XKeycode.valueOf("KEY_" + keyName);
         } catch (IllegalArgumentException e) {
             // Saved gesture config references a key that no longer exists in XKeycode.
-            Log.w("TouchpadView", "Unknown gesture key action: " + action);
+            Timber.tag("TouchpadView").w("Unknown gesture key action: " + action);
             return null;
         }
     }
@@ -2372,7 +2371,7 @@ public class TouchpadView extends View implements View.OnCapturedPointerListener
     }
 
     public void setTouchscreenMode(boolean isTouchscreenMode) {
-        Log.d("TouchpadView", "Setting touchscreen mode to " + isTouchscreenMode);
+        Timber.tag("TouchpadView").d("Setting touchscreen mode to " + isTouchscreenMode);
         this.isTouchscreenMode = isTouchscreenMode;
     }
 

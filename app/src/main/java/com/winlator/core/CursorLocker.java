@@ -1,12 +1,11 @@
 package com.winlator.core;
 
-import android.util.Log;
-
 import com.winlator.math.Mathf;
 import com.winlator.xserver.XServer;
 
 import java.util.Timer;
 import java.util.TimerTask;
+import timber.log.Timber;
 
 public class CursorLocker extends TimerTask {
     private final XServer xServer;
@@ -60,7 +59,7 @@ public class CursorLocker extends TimerTask {
                     pauseLock.wait();
                 }
                 catch (InterruptedException e) {
-                    Log.e("CursorLocker", "Pause lock interrupted: " + e);
+                    Timber.tag("CursorLocker").e("Pause lock interrupted: " + e);
                 }
             }
         }

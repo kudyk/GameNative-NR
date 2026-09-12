@@ -1,12 +1,11 @@
 package com.winlator.renderer.lsfg;
 
 import android.content.Context;
-import android.util.Log;
-
 import com.winlator.container.Container;
 import com.winlator.core.KeyValueSet;
 
 import java.io.File;
+import timber.log.Timber;
 
 public final class LosslessScaling {
     private static final String TAG = "LosslessScaling";
@@ -19,7 +18,7 @@ public final class LosslessScaling {
         try {
             System.loadLibrary("vulkan_renderer");
         } catch (Throwable t) {
-            Log.w(TAG, "Failed to load libvulkan_renderer: " + t.getMessage());
+            Timber.tag(TAG).w("Failed to load libvulkan_renderer: " + t.getMessage());
         }
     }
 
@@ -63,14 +62,14 @@ public final class LosslessScaling {
             int status = nativeBuildCache(dll.getAbsolutePath(), cache.getAbsolutePath(), fp16);
             if (status != STATUS_OK || !cache.isFile()) {
                 if (cache.isFile()) cache.delete();
-                Log.w(TAG, "Shader cache build failed with status " + status);
+                Timber.tag(TAG).w("Shader cache build failed with status " + status);
                 return null;
             }
-            Log.i(TAG, "Built shader cache " + cache.getAbsolutePath() + " (fp16=" + fp16 + ")");
+            Timber.tag(TAG).i("Built shader cache " + cache.getAbsolutePath() + " (fp16=" + fp16 + ")");
             return cache;
         } catch (Throwable t) {
             if (cache.isFile()) cache.delete();
-            Log.w(TAG, "Shader cache build failed: " + t.getMessage());
+            Timber.tag(TAG).w("Shader cache build failed: " + t.getMessage());
             return null;
         }
     }
