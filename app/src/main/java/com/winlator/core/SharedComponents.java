@@ -1,7 +1,6 @@
 package com.winlator.core;
 
 import android.content.Context;
-import android.util.Log;
 
 import com.winlator.xenvironment.ImageFs;
 
@@ -9,6 +8,7 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import timber.log.Timber;
 
 public abstract class SharedComponents {
     private static final String TAG = "SharedComponents";
@@ -49,7 +49,7 @@ public abstract class SharedComponents {
             if (!marker.isFile() || !sourceIdentity.equals(FileUtils.readString(marker))) {
                 FileUtils.delete(sharedDir);
                 if (!sharedDir.isDirectory() && !sharedDir.mkdirs()) {
-                    Log.e(TAG, "Failed to create shared dir for " + componentId);
+                    Timber.tag(TAG).e("Failed to create shared dir for " + componentId);
                     return false;
                 }
 
@@ -58,13 +58,13 @@ public abstract class SharedComponents {
                         : TarCompressorUtils.extract(type, sourceFile, sharedDir);
 
                 if (!extracted) {
-                    Log.e(TAG, "Failed to extract shared component " + componentId);
+                    Timber.tag(TAG).e("Failed to extract shared component " + componentId);
                     FileUtils.delete(sharedDir);
                     return false;
                 }
 
                 if (!FileUtils.write(marker, sourceIdentity.getBytes(StandardCharsets.UTF_8))) {
-                    Log.e(TAG, "Failed to write completion marker for " + componentId);
+                    Timber.tag(TAG).e("Failed to write completion marker for " + componentId);
                     FileUtils.delete(sharedDir);
                     return false;
                 }
@@ -85,7 +85,7 @@ public abstract class SharedComponents {
             installed = context.getPackageManager().getPackageInfo(context.getPackageName(), 0).lastUpdateTime;
         }
         catch (Exception e) {
-            Log.w(TAG, "Failed to read package info: " + e);
+            Timber.tag(TAG).w("Failed to read package info: " + e);
         }
         return "asset:" + assetFile + ":" + installed;
     }

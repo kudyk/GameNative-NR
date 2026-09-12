@@ -2,7 +2,6 @@ package com.winlator.sysvshm;
 
 import android.os.SharedMemory;
 import android.system.ErrnoException;
-import android.util.Log;
 import android.util.SparseArray;
 
 import com.winlator.xconnector.XConnectorEpoll;
@@ -10,6 +9,7 @@ import com.winlator.xconnector.XConnectorEpoll;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
+import timber.log.Timber;
 
 public class SysVSharedMemory {
     private final SparseArray<SHMemory> shmemories = new SparseArray<>();
@@ -135,7 +135,7 @@ public class SysVSharedMemory {
                 return fd != null ? fd : -1;
                 }
         } catch (ErrnoException | NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
-            e.printStackTrace();
+            Timber.e(e);
         }
         return -1;
     }

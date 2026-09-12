@@ -1,7 +1,5 @@
 package com.winlator.xenvironment.components;
 
-import android.util.Log;
-
 import com.winlator.sysvshm.SysVSHMConnectionHandler;
 import com.winlator.sysvshm.SysVSHMRequestHandler;
 import com.winlator.sysvshm.SysVSharedMemory;
@@ -10,6 +8,7 @@ import com.winlator.xconnector.XConnectorEpoll;
 import com.winlator.xenvironment.EnvironmentComponent;
 import com.winlator.xserver.SHMSegmentManager;
 import com.winlator.xserver.XServer;
+import timber.log.Timber;
 
 public class SysVSharedMemoryComponent extends EnvironmentComponent {
     private XConnectorEpoll connector;
@@ -24,7 +23,7 @@ public class SysVSharedMemoryComponent extends EnvironmentComponent {
 
     @Override
     public void start() {
-        Log.d("SysVSharedMemoryComponent", "Starting...");
+        Timber.tag("SysVSharedMemoryComponent").d("Starting...");
         if (connector != null) return;
         sysVSharedMemory = new SysVSharedMemory();
         connector = new XConnectorEpoll(socketConfig, new SysVSHMConnectionHandler(sysVSharedMemory), new SysVSHMRequestHandler());
@@ -35,7 +34,7 @@ public class SysVSharedMemoryComponent extends EnvironmentComponent {
 
     @Override
     public void stop() {
-        Log.d("SysVSharedMemoryComponent", "Stopping...");
+        Timber.tag("SysVSharedMemoryComponent").d("Stopping...");
         if (connector != null) {
             connector.stop();
             connector = null;

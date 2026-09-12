@@ -1,7 +1,6 @@
 package com.winlator.container;
 
 import android.content.Context;
-import android.util.Log;
 
 import com.winlator.core.WineInfo;
 import com.winlator.core.envvars.EnvVars;
@@ -25,6 +24,7 @@ import java.util.Set;
 
 import app.gamenative.PluviaApp;
 import app.gamenative.events.AndroidEvent;
+import timber.log.Timber;
 
 public final class ContainerOverlay {
     private static final String TAG = "ContainerOverlay";
@@ -135,7 +135,7 @@ public final class ContainerOverlay {
             envVars.put(entry.getKey(), entry.getValue());
         }
         if (!debug) envVars.remove(ENV_DEBUG);
-        Log.i(TAG, "Overlay enabled for " + container.id + ": upper=" + upperPath + " lower=" + lowerPath);
+        Timber.tag(TAG).i("Overlay enabled for " + container.id + ": upper=" + upperPath + " lower=" + lowerPath);
         return true;
     }
 
@@ -155,7 +155,7 @@ public final class ContainerOverlay {
             return ContainerFiles.markOpaque(upperWine, ContainerFiles.DOSDEVICES);
         }
         catch (IOException e) {
-            Log.w(TAG, "createThinPrefix failed for " + upperWine + ": " + e);
+            Timber.tag(TAG).w("createThinPrefix failed for " + upperWine + ": " + e);
             return false;
         }
     }
@@ -194,7 +194,7 @@ public final class ContainerOverlay {
             return true;
         }
         catch (IOException e) {
-            Log.w(TAG, "copyTree failed " + src + " -> " + dst + ": " + e);
+            Timber.tag(TAG).w("copyTree failed " + src + " -> " + dst + ": " + e);
             return false;
         }
     }

@@ -1,11 +1,10 @@
 package com.winlator.core;
 
-import android.util.Log;
-
 import org.json.JSONArray;
 import org.json.JSONException;
 
 import java.util.Arrays;
+import timber.log.Timber;
 
 public abstract class ArrayUtils {
     public static byte[] concat(byte[]... elements) {
@@ -36,7 +35,7 @@ public abstract class ArrayUtils {
                 stringArray[i] = data.getString(i);
             }
             catch (JSONException e) {
-                Log.e("ArrayUtils", "Failed to create string array from json data: " + e);
+                Timber.tag("ArrayUtils").e("Failed to create string array from json data: " + e);
             }
         }
         return stringArray;

@@ -1440,7 +1440,7 @@ class LibraryViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 Timber.tag("LibraryViewModel").e(e, "Error fetching compatibility data: ${e.message}")
-                e.printStackTrace()
+                Timber.e(e)
             }
         }
     }

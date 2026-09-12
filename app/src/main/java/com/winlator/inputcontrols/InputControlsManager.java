@@ -3,8 +3,6 @@ package com.winlator.inputcontrols;
 import android.content.Context;
 import android.content.res.AssetManager;
 import android.util.JsonReader;
-import android.util.Log;
-
 import com.winlator.PrefManager;
 import com.winlator.core.AppUtils;
 import com.winlator.core.FileUtils;
@@ -24,6 +22,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import timber.log.Timber;
 
 public class InputControlsManager {
     public static final int MAX_PROFILE_NAME_LENGTH = 80;
@@ -154,7 +153,7 @@ public class InputControlsManager {
                                     throw new IOException("Unable to write built-in control profile");
                                 }
                             } catch (Exception e) {
-                                Log.w("InputControlsManager", "Failed to create profile '" + originProfile.getName() + "' (newId=" + newId + ", file=" + freeFile + ")", e);
+                                Timber.tag("InputControlsManager").w(e, "Failed to create profile '" + originProfile.getName() + "' (newId=" + newId + ", file=" + freeFile + ")");
                             }
                         }
                     }
@@ -183,7 +182,7 @@ public class InputControlsManager {
                 ControlsProfile profile = loadInstalledProfile(file);
                 if (profile == null) continue;
                 if (!loadedIds.add(profile.id)) {
-                    Log.w("InputControlsManager", "Ignoring duplicate control profile ID " + profile.id);
+                    Timber.tag("InputControlsManager").w("Ignoring duplicate control profile ID " + profile.id);
                     continue;
                 }
                 profiles.add(profile);
@@ -266,7 +265,7 @@ public class InputControlsManager {
         }
         catch (Exception e) {
             if (newFile.isFile() && !newFile.delete()) {
-                Log.w("InputControlsManager", "Unable to remove incomplete duplicate " + newFile);
+                Timber.tag("InputControlsManager").w("Unable to remove incomplete duplicate " + newFile);
             }
             throw new IllegalStateException("Unable to duplicate control profile", e);
         }
@@ -307,7 +306,7 @@ public class InputControlsManager {
             }
             ControlsProfile newProfile = loadProfile(context, newFile);
             if (newProfile == null) {
-                if (!newFile.delete()) Log.w("InputControlsManager", "Unable to remove invalid import " + newFile);
+                if (!newFile.delete()) Timber.tag("InputControlsManager").w("Unable to remove invalid import " + newFile);
                 throw new IOException("Unable to read imported control profile");
             }
             profiles.add(newProfile);
@@ -448,7 +447,7 @@ public class InputControlsManager {
             return profile;
         }
         catch (Exception e) {
-            Log.w("InputControlsManager", "Ignoring malformed control profile", e);
+            Timber.tag("InputControlsManager").w(e, "Ignoring malformed control profile");
             return null;
         }
     }
@@ -471,7 +470,7 @@ public class InputControlsManager {
         }
         ControlsProfile profile = loadProfile(context, file);
         if (profile != null && profile.id != fileId) {
-            Log.w("InputControlsManager", "Ignoring control profile whose ID does not match its filename: " + file);
+            Timber.tag("InputControlsManager").w("Ignoring control profile whose ID does not match its filename: " + file);
             return null;
         }
         return profile;

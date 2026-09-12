@@ -3,6 +3,7 @@ package com.winlator.renderer;
 import androidx.annotation.Keep;
 import com.winlator.xserver.Drawable;
 import java.nio.ByteBuffer;
+import timber.log.Timber;
 
 public class GPUImage extends NativeTexture {
     private long hardwareBufferPtr;
@@ -20,12 +21,12 @@ public class GPUImage extends NativeTexture {
         if (hardwareBufferPtr != 0) {
             virtualData = lockHardwareBuffer(hardwareBufferPtr);
             if (virtualData == null) {
-                System.err.println("Error: Failed to lock hardware buffer");
+                Timber.e("Error: Failed to lock hardware buffer");
                 destroyHardwareBuffer(hardwareBufferPtr);
                 hardwareBufferPtr = 0;
             }
         } else {
-            System.err.println("Error: Failed to create hardware buffer");
+            Timber.e("Error: Failed to create hardware buffer");
         }
     }
 
@@ -34,12 +35,12 @@ public class GPUImage extends NativeTexture {
         if (hardwareBufferPtr != 0) {
             virtualData = lockHardwareBuffer(hardwareBufferPtr);
             if (virtualData == null) {
-                System.err.println("Error: Failed to lock hardware buffer");
+                Timber.e("Error: Failed to lock hardware buffer");
                 destroyHardwareBuffer(hardwareBufferPtr);
                 hardwareBufferPtr = 0;
             }
         } else {
-            System.err.println("Error: Failed to create hardware buffer");
+            Timber.e("Error: Failed to create hardware buffer");
         }
     }
 
@@ -50,7 +51,7 @@ public class GPUImage extends NativeTexture {
         if (hardwareBufferPtr != 0) {
             imageKHRPtr = createImageKHR(hardwareBufferPtr, textureId);
             if (imageKHRPtr == 0) {
-                System.err.println("Error: Failed to create EGL image");
+                Timber.e("Error: Failed to create EGL image");
                 destroyHardwareBuffer(hardwareBufferPtr);
                 hardwareBufferPtr = 0;
             }

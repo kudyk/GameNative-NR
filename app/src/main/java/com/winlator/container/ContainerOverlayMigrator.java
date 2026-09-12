@@ -1,7 +1,6 @@
 package com.winlator.container;
 
 import android.content.Context;
-import android.util.Log;
 
 import com.winlator.contents.ContentsManager;
 import com.winlator.core.FileUtils;
@@ -18,6 +17,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
+import timber.log.Timber;
 
 public final class ContainerOverlayMigrator {
     private static final String TAG = "ContainerOverlayMigrator";
@@ -50,13 +50,13 @@ public final class ContainerOverlayMigrator {
             if (!ContainerOverlay.isEligible(container)) return true;
             boolean thin = !container.getBasePrefix().isEmpty();
             if (!thin && !ContainerOverlay.bionicLibFile(context).isFile()) {
-                Log.e(TAG, "Overlay library missing, container " + container.id + " stays a full prefix");
+                Timber.tag(TAG).e("Overlay library missing, container " + container.id + " stays a full prefix");
                 return true;
             }
 
             File baseWine = BasePrefix.ensure(context, contentsManager, container.getWineVersion());
             if (baseWine == null) {
-                Log.e(TAG, "No base prefix for " + container.getWineVersion() + ", container " + container.id);
+                Timber.tag(TAG).e("No base prefix for " + container.getWineVersion() + ", container " + container.id);
                 return !thin;
             }
 
@@ -75,7 +75,7 @@ public final class ContainerOverlayMigrator {
             }
         }
         catch (Throwable t) {
-            Log.w(TAG, "migrateIfNeeded failed", t);
+            Timber.tag(TAG).w(t, "migrateIfNeeded failed");
         }
         return true;
     }
@@ -105,7 +105,7 @@ public final class ContainerOverlayMigrator {
                 if (file.delete()) dropped++;
             }
         }
-        if (dropped > 0) Log.i(TAG, "Dropped " + dropped + " stale Wine builtins from " + upperWine);
+        if (dropped > 0) Timber.tag(TAG).i("Dropped " + dropped + " stale Wine builtins from " + upperWine);
         return dropped;
     }
 
@@ -133,7 +133,7 @@ public final class ContainerOverlayMigrator {
     public static Result migrate(Container container, File baseWine, List<File> protonLibDirs) {
         File upper = new File(container.getRootDir(), ".wine");
         Result result = prune(upper, baseWine, protonLibDirs);
-        Log.i(TAG, "Overlay migration for container " + container.id + ": " + result);
+        Timber.tag(TAG).i("Overlay migration for container " + container.id + ": " + result);
         if (result.completed) {
             ContainerFiles.deleteRecursively(new File(container.getRootDir(), ".cache/original_dlls"));
             new File(upper, ContainerOverlay.OVERLAY_DIR).mkdirs();

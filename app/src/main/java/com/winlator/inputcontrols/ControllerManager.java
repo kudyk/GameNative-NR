@@ -7,7 +7,6 @@ import android.hardware.input.InputManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
-import android.util.Log;
 import android.preference.PreferenceManager;
 import android.util.SparseArray;
 import android.view.InputDevice;
@@ -24,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
+import timber.log.Timber;
 
 public class ControllerManager {
     private static final String TAG = "ControllerManager";
@@ -440,10 +440,10 @@ public class ControllerManager {
             assignDeviceIdentifierToSlot(slot, deviceIdentifier);
             saveAssignments();
             notifySlotsChanged();
-            Log.i(TAG, "Auto-assigned deviceId=" + deviceId + " to Player " + (slot + 1));
+            Timber.tag(TAG).i("Auto-assigned deviceId=" + deviceId + " to Player " + (slot + 1));
             return;
         }
-        Log.i(TAG, "No free controller slot for deviceId=" + deviceId);
+        Timber.tag(TAG).i("No free controller slot for deviceId=" + deviceId);
     }
 
     /**
@@ -467,7 +467,7 @@ public class ControllerManager {
 
             int slot = getPreferredFreeSlot(deviceIdentifier);
             if (slot < 0) {
-                Log.i(TAG, "No free controller slot for connected deviceId=" + device.getId());
+                Timber.tag(TAG).i("No free controller slot for connected deviceId=" + device.getId());
                 break;
             }
 
@@ -475,7 +475,7 @@ public class ControllerManager {
             assignDeviceIdentifierToSlot(slot, deviceIdentifier);
             knownDeviceIdentifiers.put(device.getId(), deviceIdentifier);
             changed = true;
-            Log.i(TAG, "Auto-assigned connected deviceId=" + device.getId()
+            Timber.tag(TAG).i("Auto-assigned connected deviceId=" + device.getId()
                     + " to Player " + (slot + 1));
         }
 
@@ -498,7 +498,7 @@ public class ControllerManager {
             markSlotRecentlyFreed(slot);
             saveAssignments();
             notifySlotsChanged();
-            Log.i(TAG, "Unassigned disconnected deviceId=" + deviceId + " from Player " + (slot + 1));
+            Timber.tag(TAG).i("Unassigned disconnected deviceId=" + deviceId + " from Player " + (slot + 1));
         }
     }
 
@@ -543,7 +543,7 @@ public class ControllerManager {
             assignDeviceIdentifierToSlot(0, deviceIdentifier);
             saveAssignments();
             notifySlotsChanged();
-            Log.i(TAG, "deviceId=" + deviceId + " claimed empty Player 1");
+            Timber.tag(TAG).i("deviceId=" + deviceId + " claimed empty Player 1");
             return true;
         }
         String occupantIdentifier = getDeviceIdentifier(occupant);
@@ -556,7 +556,7 @@ public class ControllerManager {
         }
         saveAssignments();
         notifySlotsChanged();
-        Log.i(TAG, "deviceId=" + deviceId + " displaced idle Player 1");
+        Timber.tag(TAG).i("deviceId=" + deviceId + " displaced idle Player 1");
         return true;
     }
 

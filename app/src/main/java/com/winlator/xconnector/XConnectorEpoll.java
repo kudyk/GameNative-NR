@@ -1,10 +1,9 @@
 package com.winlator.xconnector;
-import android.util.Log;
-
 import android.util.SparseArray;
 import androidx.annotation.Keep;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import timber.log.Timber;
 
 public class XConnectorEpoll implements Runnable {
     private static final String TAG = "XConnectorEpoll";
@@ -101,14 +100,14 @@ public class XConnectorEpoll implements Runnable {
         Thread thread;
         if (!this.running && (thread = this.epollThread) != null) {
             this.running = true;
-            Log.d(TAG, logPrefix() + " Starting connector thread (epollFd=" + this.epollFd + ", serverFd=" + this.serverFd + ", shutdownFd=" + this.shutdownFd + ")");
+            Timber.tag(TAG).d(logPrefix() + " Starting connector thread (epollFd=" + this.epollFd + ", serverFd=" + this.serverFd + ", shutdownFd=" + this.shutdownFd + ")");
             thread.start();
         }
     }
 
     public synchronized void stop() {
         if (this.running && this.epollThread != null) {
-            Log.d(TAG, logPrefix() + " Stopping connector thread (connectedClients=" + this.connectedClients.size() + ")");
+            Timber.tag(TAG).d(logPrefix() + " Stopping connector thread (connectedClients=" + this.connectedClients.size() + ")");
             this.running = false;
             requestShutdown();
             while (this.epollThread.isAlive()) {
@@ -126,7 +125,7 @@ public class XConnectorEpoll implements Runnable {
         while (this.running) {
             if (!doEpollIndefinitely(this.epollFd, this.serverFd, !this.multithreadedClients && this.monitorClients)) {
                 if (this.running) {
-                    Log.e(TAG, logPrefix() + " epoll loop exited unexpectedly; shutting down all X clients (epollFd=" + this.epollFd + ", serverFd=" + this.serverFd + ", shutdownFd=" + this.shutdownFd + ", connectedClients=" + this.connectedClients.size() + ", multithreadedClients=" + this.multithreadedClients + ", monitorClients=" + this.monitorClients + ")");
+                    Timber.tag(TAG).e(logPrefix() + " epoll loop exited unexpectedly; shutting down all X clients (epollFd=" + this.epollFd + ", serverFd=" + this.serverFd + ", shutdownFd=" + this.shutdownFd + ", connectedClients=" + this.connectedClients.size() + ", multithreadedClients=" + this.multithreadedClients + ", monitorClients=" + this.monitorClients + ")");
                 }
                 break;
             }
@@ -213,7 +212,7 @@ public class XConnectorEpoll implements Runnable {
                 // brake in whole batches), so it runs uncapped instead.
                 if (client.pacedSupersedes++ >= 8) {
                     client.pacingExempt = true;
-                    Log.i(TAG, logPrefix() + " client fd " + client.clientSocket.fd
+                    Timber.tag(TAG).i(logPrefix() + " client fd " + client.clientSocket.fd
                             + " pipelines frames without a per-frame sync; SHM pacing exempted");
                     return;
                 }

@@ -1,7 +1,6 @@
 package com.winlator.core;
 
 import android.os.Process;
-import android.util.Log;
 
 import app.gamenative.BuildConfig;
 
@@ -23,6 +22,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import timber.log.Timber;
 
 public abstract class ProcessHelper {
     public static final boolean PRINT_DEBUG = true; // FIXME change to false
@@ -74,7 +74,7 @@ public abstract class ProcessHelper {
             return;
         }
 
-        Log.w("ProcessHelper", String.format(
+        Timber.tag("ProcessHelper").w(String.format(
             "Found %d stale Wine process(es) before launch; hard-killing: %s",
             stalePids.size(), String.join(", ", stalePids)));
 
@@ -87,7 +87,7 @@ public abstract class ProcessHelper {
         } while (!remaining.isEmpty() && System.currentTimeMillis() < deadlineMs);
 
         if (!remaining.isEmpty()) {
-            Log.w("ProcessHelper", String.format(
+            Timber.tag("ProcessHelper").w(String.format(
                 "Wine processes still present after hard-kill: %s",
                 String.join(", ", remaining)));
             throw new IllegalStateException(
@@ -207,7 +207,7 @@ public abstract class ProcessHelper {
             if (BuildConfig.MODERN_ANDROID) command = "/system/bin/linker64 " + command;
 
             if (BuildConfig.DEBUG) {
-                Log.d("ProcessHelper", "Executing with output: " + Arrays.toString(splitCommand(command)) + ", " + Arrays.toString(envp) + ", " + workingDir);
+                Timber.tag("ProcessHelper").d("Executing with output: " + Arrays.toString(splitCommand(command)) + ", " + Arrays.toString(envp) + ", " + workingDir);
             }
 
             ProcessBuilder pb = new ProcessBuilder(splitCommand(command));
@@ -307,7 +307,7 @@ public abstract class ProcessHelper {
             if (BuildConfig.MODERN_ANDROID) command = "/system/bin/linker64 " + command;
 
             if (BuildConfig.DEBUG) {
-                Log.d("ProcessHelper", "Executing: " + Arrays.toString(splitCommand(command)) + ", " + Arrays.toString(envp) + ", " + workingDir);
+                Timber.tag("ProcessHelper").d("Executing: " + Arrays.toString(splitCommand(command)) + ", " + Arrays.toString(envp) + ", " + workingDir);
             }
 
             process = Runtime.getRuntime().exec(splitCommand(command), envp, workingDir);
@@ -328,7 +328,7 @@ public abstract class ProcessHelper {
             if (terminationCallback != null) createWaitForThread(process, terminationCallback);
         }
         catch (Exception e) {
-            Log.e("ProcessHelper", "Failed to execute command: " + e);
+            Timber.tag("ProcessHelper").e("Failed to execute command: " + e);
             if (process != null) process.destroyForcibly();
             if (terminationCallback != null) terminationCallback.call(-1);
         }
@@ -340,7 +340,7 @@ public abstract class ProcessHelper {
             if (BuildConfig.MODERN_ANDROID) command = "/system/bin/linker64 " + command;
 
             if (BuildConfig.DEBUG) {
-                Log.d("ProcessHelper", "Executing: " + Arrays.toString(splitCommand(command)) + ", " + Arrays.toString(envp) + ", " + workingDir);
+                Timber.tag("ProcessHelper").d("Executing: " + Arrays.toString(splitCommand(command)) + ", " + Arrays.toString(envp) + ", " + workingDir);
             }
 
             java.lang.Process process = Runtime.getRuntime().exec(splitCommand(command), envp, workingDir);
@@ -351,7 +351,7 @@ public abstract class ProcessHelper {
 
             return process;
         } catch (Exception e) {
-            Log.e("ProcessHelper", "Failed to execute command: " + e);
+            Timber.tag("ProcessHelper").e("Failed to execute command: " + e);
             return null;
         }
     }
@@ -376,7 +376,7 @@ public abstract class ProcessHelper {
                 }
             }
         } catch (IOException e) {
-            Log.e("ProcessHelper", "Failed to retrieve user id in order to list processes: " + e);
+            Timber.tag("ProcessHelper").e("Failed to retrieve user id in order to list processes: " + e);
             return processes;
         }
 
@@ -408,7 +408,7 @@ public abstract class ProcessHelper {
                 }
             }
         } catch (IOException e) {
-            Log.e("ProcessHelper", "Failed to list processes: " + e);
+            Timber.tag("ProcessHelper").e("Failed to list processes: " + e);
         }
 
         return processes;
@@ -419,7 +419,8 @@ public abstract class ProcessHelper {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    if (PRINT_DEBUG) System.out.println(line);
+                    // Via Timber (not System.out) so the in-app logging toggle also silences process output.
+                    if (PRINT_DEBUG) Timber.tag("ProcessOutput").d(line);
                     synchronized (debugCallbacks) {
                         if (!debugCallbacks.isEmpty()) {
                             for (Callback<String> callback : debugCallbacks) callback.call(line);
@@ -431,7 +432,7 @@ public abstract class ProcessHelper {
                 // Expected when process.destroy() is called - silently ignore
             }
             catch (IOException e) {
-                Log.e("ProcessHelper", "Error on debug thread: " + e);
+                Timber.tag("ProcessHelper").e("Error on debug thread: " + e);
             }
         });
     }
@@ -443,13 +444,12 @@ public abstract class ProcessHelper {
                 while ((line = reader.readLine()) != null) {
                     // Always log to debug log
                     if (streamType != null && pid != -1) {
-                        Log.d("ProcessOutput", "[PID:" + pid + "][" + streamType + "] " + line);
+                        Timber.tag("ProcessOutput").d("[PID:" + pid + "][" + streamType + "] " + line);
                     } else {
                         // Always log even if streamType/pid not provided
-                        Log.d("ProcessOutput", line);
+                        Timber.tag("ProcessOutput").d(line);
                     }
 
-                    if (PRINT_DEBUG) System.out.println(line);
                     synchronized (debugCallbacks) {
                         if (!debugCallbacks.isEmpty()) {
                             for (Callback<String> callback : debugCallbacks) callback.call(line);
@@ -471,7 +471,7 @@ public abstract class ProcessHelper {
                     terminationCallback.call(status);
                 }
                 catch (InterruptedException e) {
-                    Log.e("ProcessHelper", "Error waiting for process termination", e);
+                    Timber.tag("ProcessHelper").e(e, "Error waiting for process termination");
                 }
             }
         });

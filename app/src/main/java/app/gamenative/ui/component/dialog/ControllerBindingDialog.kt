@@ -1,6 +1,5 @@
 package app.gamenative.ui.component.dialog
 
-import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,6 +23,7 @@ import androidx.compose.ui.window.DialogProperties
 import app.gamenative.ui.component.NoExtractOutlinedTextField
 import com.winlator.inputcontrols.Binding
 import com.winlator.inputcontrols.BindingCombo
+import timber.log.Timber
 
 /**
  * Dialog for selecting controller button bindings.
@@ -402,7 +402,7 @@ fun ControllerBindingDialog(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
-                                            Log.d("ControllerBindingDialog", "Clearing binding for $buttonName")
+                                            Timber.tag("ControllerBindingDialog").d("Clearing binding for $buttonName")
                                             submitSelection(null)
                                         },
                                     color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
@@ -468,7 +468,7 @@ fun ControllerBindingDialog(
                                         } else if (selectedBindings.size < BindingCombo.MAX_BINDINGS) {
                                             selectedBindings.add(binding)
                                         }
-                                        Log.d("ControllerBindingDialog", "Binding toggled for $buttonName: ${binding.name}")
+                                        Timber.tag("ControllerBindingDialog").d("Binding toggled for $buttonName: ${binding.name}")
                                     }
                                 )
                             }

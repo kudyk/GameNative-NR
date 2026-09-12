@@ -9,6 +9,7 @@ import com.winlator.core.FileUtils;
 import java.io.File;
 import java.io.IOException;
 import java.util.Locale;
+import timber.log.Timber;
 
 public class ImageFs {
     private static volatile ImageFs INSTANCE;
@@ -95,7 +96,7 @@ public class ImageFs {
             FileUtils.writeString(file, String.valueOf(version));
         }
         catch (IOException e) {
-            e.printStackTrace();
+            Timber.e(e);
         }
     }
 
@@ -119,7 +120,7 @@ public class ImageFs {
             FileUtils.writeString(file, variant);
         }
         catch (IOException e) {
-            e.printStackTrace();
+            Timber.e(e);
         }
     }
 

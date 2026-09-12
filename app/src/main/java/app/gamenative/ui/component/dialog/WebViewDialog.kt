@@ -28,6 +28,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import app.gamenative.ui.theme.PluviaTheme
+import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -124,7 +125,7 @@ private fun Preview_WebView() {
             isVisible = true,
             url = "https://github.com/utkarshdalal/GameNative",
             onDismissRequest = {
-                println("WE CAN GO BACK!")
+                Timber.d("WE CAN GO BACK!")
             },
         )
     }

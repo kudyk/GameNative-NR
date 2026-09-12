@@ -11,7 +11,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Process;
 import android.provider.ContactsContract;
-import android.util.Log;
 
 import androidx.annotation.NonNull;
 
@@ -58,6 +57,7 @@ import app.gamenative.BuildConfig;
 import app.gamenative.PluviaApp;
 import app.gamenative.events.AndroidEvent;
 import app.gamenative.service.SteamService;
+import timber.log.Timber;
 
 public class BionicProgramLauncherComponent extends GuestProgramLauncherComponent {
     private String guestExecutable;
@@ -123,7 +123,7 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
                 extractBox64Files();
             if (preUnpack != null) preUnpack.run();
             pid = execGuestProgram();
-            Log.d("BionicProgramLauncherComponent", "Process " + pid + " started");
+            Timber.tag("BionicProgramLauncherComponent").d("Process " + pid + " started");
             SteamService.setKeepAlive(true);
         }
     }
@@ -133,7 +133,7 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
         synchronized (lock) {
             if (pid != -1) {
                 Process.killProcess(pid);
-                Log.d("BionicProgramLauncherComponent", "Stopped process " + pid);
+                Timber.tag("BionicProgramLauncherComponent").d("Stopped process " + pid);
                 List<ProcessHelper.ProcessInfo> subProcesses = ProcessHelper.listSubProcesses();
                 for (ProcessHelper.ProcessInfo subProcess : subProcesses) {
                     Process.killProcess(subProcess.pid);
@@ -224,7 +224,7 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
             try (RandomAccessFile raf = new RandomAccessFile(memFile, "rw")) {
                 raf.setLength(64);
             } catch (IOException e) {
-                Log.e("EVSHIM_HOST", "Failed to create mem file for player index "+i, e);
+                Timber.tag("EVSHIM_HOST").e(e, "Failed to create mem file for player index "+i);
             }
         }
         ImageFs imageFs = ImageFs.find(context);
@@ -275,7 +275,7 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
 
         String winePath = imageFs.getWinePath() + "/bin";
 
-        Log.d("BionicProgramLauncherComponent", "WinePath is " + winePath);
+        Timber.tag("BionicProgramLauncherComponent").d("WinePath is " + winePath);
 
         envVars.put("PATH", winePath + ":" +
                 rootDir.getPath() + "/usr/bin");
@@ -412,11 +412,11 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
             ContainerOverlay.applyBionicLaunchEnv(context, container, envVars);
         }
         catch (IllegalStateException e) {
-            Log.e("BionicProgramLauncherComponent", e.getMessage());
+            Timber.tag("BionicProgramLauncherComponent").e(e.getMessage());
             return -1;
         }
 
-        Log.d("BionicProgramLauncherComponent", "env vars are " + EnvVarRedaction.redact(envVars));
+        Timber.tag("BionicProgramLauncherComponent").d("env vars are " + EnvVarRedaction.redact(envVars));
 
         String emulator = container.getEmulator();
 
@@ -471,7 +471,7 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
         Context context = environment.getContext();
         String box64Version = container.getBox64Version();
 
-        Log.i("Extraction", "Extracting required box64 version: " + box64Version);
+        Timber.tag("Extraction").i("Extracting required box64 version: " + box64Version);
         File rootDir = imageFs.getRootDir();
 
         // No more version check, just extract directly.
@@ -504,14 +504,14 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
         String wowbox64Version = container.getBox64Version();
         String fexcoreVersion = container.getFEXCoreVersion();
 
-        Log.d("Extraction", "box64Version in use: " + wowbox64Version);
-        Log.d("Extraction", "fexcoreVersion in use: " + fexcoreVersion);
+        Timber.tag("Extraction").d("box64Version in use: " + wowbox64Version);
+        Timber.tag("Extraction").d("fexcoreVersion in use: " + fexcoreVersion);
 
         ContentProfile wowboxprofile = contentsManager.getProfileByEntryName("wowbox64-" + wowbox64Version);
         if (wowboxprofile != null) {
             contentsManager.applyContent(wowboxprofile);
         } else {
-            Log.d("Extraction", "Extracting box64Version: " + wowbox64Version);
+            Timber.tag("Extraction").d("Extracting box64Version: " + wowbox64Version);
             SharedComponents.extractAndLink(environment.getContext(), "wowbox64-" + wowbox64Version, TarCompressorUtils.Type.ZSTD, "wowbox64/wowbox64-" + wowbox64Version + ".tzst", system32dir, null);
         }
         container.putExtra("box64Version", wowbox64Version);
@@ -521,7 +521,7 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
         if (fexprofile != null) {
             contentsManager.applyContent(fexprofile);
         } else {
-            Log.d("Extraction", "Extracting fexcoreVersion: " + fexcoreVersion);
+            Timber.tag("Extraction").d("Extracting fexcoreVersion: " + fexcoreVersion);
             SharedComponents.extractAndLink(environment.getContext(), "fexcore-" + fexcoreVersion, TarCompressorUtils.Type.ZSTD, "fexcore/fexcore-" + fexcoreVersion + ".tzst", system32dir, null);
         }
         container.putExtra("fexcoreVersion", fexcoreVersion);
@@ -638,8 +638,7 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
 
         File libFile = new File(libPath);
         if (!libFile.exists()) {
-            Log.w("BionicProgramLauncherComponent",
-                  "libsteamclient.so not found at " + libPath + "; skipping native bootstrap");
+            Timber.tag("BionicProgramLauncherComponent").w("libsteamclient.so not found at " + libPath + "; skipping native bootstrap");
             return;
         }
 
@@ -681,7 +680,7 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
                     accountName,
                     refreshToken,
                     steamId64);
-            Log.i("BionicProgramLauncherComponent", "SteamBootstrap.start rc=" + rc);
+            Timber.tag("BionicProgramLauncherComponent").i("SteamBootstrap.start rc=" + rc);
 
             // Once the engine is logged on, kick PICS + encrypted-ticket
             // pre-warm for the app we're about to launch. The Wine-side
@@ -692,17 +691,15 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
             if (rc == 0 && steamAppId != null && !steamAppId.isEmpty()) {
                 try {
                     int appIdInt = Integer.parseInt(steamAppId);
-                    Log.i("BionicProgramLauncherComponent",
-                          "SteamBootstrap.prepareApp(" + appIdInt + ")");
+                    Timber.tag("BionicProgramLauncherComponent").i("SteamBootstrap.prepareApp(" + appIdInt + ")");
                     app.gamenative.SteamBootstrap.INSTANCE.prepareApp(appIdInt);
                 } catch (NumberFormatException nfe) {
-                    Log.w("BionicProgramLauncherComponent",
-                          "steamAppId=" + steamAppId + " is not numeric; "
+                    Timber.tag("BionicProgramLauncherComponent").w("steamAppId=" + steamAppId + " is not numeric; "
                           + "skipping SteamBootstrap.prepareApp");
                 }
             }
         } catch (Throwable t) {
-            Log.e("BionicProgramLauncherComponent", "SteamBootstrap.start threw", t);
+            Timber.tag("BionicProgramLauncherComponent").e(t, "SteamBootstrap.start threw");
         }
     }
 
@@ -728,7 +725,7 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
 
         String winePath = imageFs.getWinePath() + "/bin";
 
-        Log.d("BionicProgramLauncherComponent", "WinePath is " + winePath);
+        Timber.tag("BionicProgramLauncherComponent").d("WinePath is " + winePath);
 
         envVars.put("PATH", winePath + ":" + rootDir.getPath() + "/usr/bin");
         if (BuildConfig.MODERN_ANDROID) envVars.put("REDIRECT_EXEC__PROC_SELF_EXE", winePath + "/wine");
@@ -758,7 +755,7 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
             ContainerOverlay.applyBionicLaunchEnv(context, container, envVars);
         }
         catch (IllegalStateException e) {
-            Log.e("BionicProgramLauncherComponent", e.getMessage());
+            Timber.tag("BionicProgramLauncherComponent").e(e.getMessage());
             return "";
         }
         if (extraEnv != null) envVars.putAll(extraEnv);
@@ -771,7 +768,7 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
             FileUtils.chmod(box64File, 0755);
         }
 
-        Log.d("BionicProgramLauncherComponent", "Shell command is " + finalCommand);
+        Timber.tag("BionicProgramLauncherComponent").d("Shell command is " + finalCommand);
         return ProcessHelper.execWithOutput(finalCommand, envVars.toStringArray(),
                 workingDir != null ? workingDir : imageFs.getRootDir(), includeStderr);
     }
@@ -779,7 +776,7 @@ public class BionicProgramLauncherComponent extends GuestProgramLauncherComponen
     public void restartWineServer() {
         ProcessHelper.terminateAllWineProcesses();
         pid = execGuestProgram();
-        Log.d("BionicProgramLauncherComponent", "Wine restarted successfully");
+        Timber.tag("BionicProgramLauncherComponent").d("Wine restarted successfully");
 
     }
 }

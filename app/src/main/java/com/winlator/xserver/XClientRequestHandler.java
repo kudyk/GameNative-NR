@@ -1,7 +1,5 @@
 package com.winlator.xserver;
 
-import android.util.Log;
-
 import com.winlator.xconnector.Client;
 import com.winlator.xconnector.RequestHandler;
 import com.winlator.xconnector.XInputStream;
@@ -434,7 +432,7 @@ public class XClientRequestHandler implements RequestHandler {
                     try (XLock lock = client.xServer.lockAll()){
                         client.xServer.setGrabbed(true, client);
                         outputStream.writeSuccessReply(client.getSequenceNumber(), 0);
-                        Log.d("XClientRequestHandler", "X_GrabServer request handled successfully:" + outputStream.buffer.position());
+                        Timber.tag("XClientRequestHandler").d("X_GrabServer request handled successfully:" + outputStream.buffer.position());
                     }
                     break;
                 case ClientOpcodes.UNGRAB_SERVER:
@@ -443,7 +441,7 @@ public class XClientRequestHandler implements RequestHandler {
                             client.xServer.setGrabbed(false, null);
                         }
                         outputStream.writeSuccessReply(client.getSequenceNumber(), 0);
-                        Log.d("XClientRequestHandler", "X_UngrabServer request handled successfully:" + outputStream.buffer.position());
+                        Timber.tag("XClientRequestHandler").d("X_UngrabServer request handled successfully:" + outputStream.buffer.position());
                     }
                     break;
                 default:

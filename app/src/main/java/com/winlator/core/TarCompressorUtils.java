@@ -3,8 +3,6 @@ package com.winlator.core;
 import android.content.Context;
 import android.content.res.AssetManager;
 import android.net.Uri;
-import android.util.Log;
-
 import org.apache.commons.compress.archivers.ArchiveInputStream;
 import org.apache.commons.compress.archivers.ArchiveOutputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
@@ -25,6 +23,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import timber.log.Timber;
 
 public abstract class TarCompressorUtils {
     public enum Type {XZ, ZSTD}
@@ -38,7 +37,7 @@ public abstract class TarCompressorUtils {
             tar.closeArchiveEntry();
         }
         catch (Exception e) {
-            Log.e("TarCompressorUtils", "Failed to add file: " + e);
+            Timber.tag("TarCompressorUtils").e("Failed to add file: " + e);
         }
     }
 
@@ -50,7 +49,7 @@ public abstract class TarCompressorUtils {
             tar.closeArchiveEntry();
         }
         catch (Exception e) {
-            Log.e("TarCompressorUtils", "Failed to add link file: " + e);
+            Timber.tag("TarCompressorUtils").e("Failed to add link file: " + e);
         }
     }
 
@@ -98,7 +97,7 @@ public abstract class TarCompressorUtils {
             tar.finish();
         }
         catch (IOException e) {
-            Log.e("TarCompressorUtils", "Failed to compress: " + e);
+            Timber.tag("TarCompressorUtils").e("Failed to compress: " + e);
         }
     }
 
@@ -205,7 +204,7 @@ public abstract class TarCompressorUtils {
             return true;
         }
         catch (IOException e) {
-            e.printStackTrace();
+            Timber.e(e);
             return false;
         }
     }

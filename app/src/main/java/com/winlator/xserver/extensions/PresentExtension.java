@@ -29,6 +29,7 @@ import com.winlator.xserver.events.PresentCompleteNotify;
 import com.winlator.xserver.events.PresentIdleNotify;
 
 import java.io.IOException;
+import timber.log.Timber;
 
 public class PresentExtension implements Extension {
     public static final byte MAJOR_OPCODE = -103;
@@ -101,7 +102,7 @@ public class PresentExtension implements Extension {
                     choreographer = android.view.Choreographer.getInstance();
                 }
             } catch (Exception ignored) {
-                android.util.Log.w("PresentExtension", "Choreographer unavailable, using CPU pacer");
+                Timber.tag("PresentExtension").w("Choreographer unavailable, using CPU pacer");
             }
             if (choreographer == null) {
                 startCpuPacer();
@@ -196,7 +197,7 @@ public class PresentExtension implements Extension {
                     sendIdleNotify(superseded.window, superseded.pixmap,
                             superseded.serial, superseded.idleFence);
                 } else if (supersededDrops++ < 8) {
-                    android.util.Log.w("PresentExtension", "pending idle superseded and dropped"
+                    Timber.tag("PresentExtension").w("pending idle superseded and dropped"
                             + " for window 0x" + Integer.toHexString(window.id)
                             + " serial " + superseded.serial);
                 }

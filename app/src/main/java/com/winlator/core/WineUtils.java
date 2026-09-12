@@ -1,8 +1,6 @@
 package com.winlator.core;
 
 import android.content.Context;
-import android.util.Log;
-
 import com.winlator.container.Container;
 import com.winlator.fexcore.FEXCoreManager;
 import com.winlator.xenvironment.ImageFs;
@@ -46,14 +44,14 @@ public abstract class WineUtils {
                 String migrated = drivesBefore.replace(legacyEntry, "E:" + Container.INTERNAL_STORAGE_DRIVE_PATH);
                 container.setDrives(migrated);
                 container.saveData();
-                Log.d("WineUtils", "Migrated E: drive to " + Container.INTERNAL_STORAGE_DRIVE_PATH);
+                Timber.tag("WineUtils").d("Migrated E: drive to " + Container.INTERNAL_STORAGE_DRIVE_PATH);
             }
         }
 
         // Auto-fix containers missing D: and E: drives
         String currentDrives = container.getDrives();
         if (!currentDrives.contains("D:") || !currentDrives.contains("E:")) {
-            Log.d("WineUtils", "Container missing D: or E: drives, adding them...");
+            Timber.tag("WineUtils").d("Container missing D: or E: drives, adding them...");
             String missingDrives = "";
             if (!currentDrives.contains("D:")) {
                 missingDrives += "D:" + android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
@@ -64,7 +62,7 @@ public abstract class WineUtils {
             String updatedDrives = missingDrives + currentDrives;
             container.setDrives(updatedDrives);
             container.saveData();
-            Log.d("WineUtils", "Updated container drives to: " + updatedDrives);
+            Timber.tag("WineUtils").d("Updated container drives to: " + updatedDrives);
         }
 
         String gameDirectoryPath = null;
@@ -106,7 +104,7 @@ public abstract class WineUtils {
 
             // Check if _CommonRedist exists in the game directory and symlink it to Steamworks Shared
             File gameCommonRedist = new File(gameDirectoryPath, "_CommonRedist");
-            Log.d("WineUtils", "Found _CommonRedist in game directory, creating Steamworks Shared symlink");
+            Timber.tag("WineUtils").d("Found _CommonRedist in game directory, creating Steamworks Shared symlink");
 
             // Create Steamworks Shared directory
             File steamworksSharedDir = new File(steamCommonDir, "Steamworks Shared");
@@ -119,10 +117,10 @@ public abstract class WineUtils {
             if (!steamworksCommonRedist.exists()) {
                 if (gameCommonRedist.exists() && gameCommonRedist.isDirectory()) {
                     FileUtils.symlink(gameCommonRedist.getAbsolutePath(), steamworksCommonRedist.getAbsolutePath());
-                    Log.d("WineUtils", "Created symlink from " + steamworksCommonRedist.getAbsolutePath() + " to " + gameCommonRedist.getAbsolutePath());
+                    Timber.tag("WineUtils").d("Created symlink from " + steamworksCommonRedist.getAbsolutePath() + " to " + gameCommonRedist.getAbsolutePath());
                 } else {
                     gameCommonRedist.mkdirs();
-                    Log.d("WineUtils", "Created blank _CommonRedist folder");
+                    Timber.tag("WineUtils").d("Created blank _CommonRedist folder");
                 }
             }
 
@@ -251,7 +249,7 @@ public abstract class WineUtils {
             }
         }
         catch (JSONException e) {
-            Log.e("WineUtils", "Failed to override win component dlls: " + e);
+            Timber.tag("WineUtils").e("Failed to override win component dlls: " + e);
         }
     }
 
@@ -270,7 +268,7 @@ public abstract class WineUtils {
                 else registryEditor.removeValue(dllOverridesKey, dlname);
             }
         } catch (JSONException e) {
-            Log.e("WineUtils", "Failed to apply DLL overrides for identifier: " + identifier, e);
+            Timber.tag("WineUtils").e(e, "Failed to apply DLL overrides for identifier: " + identifier);
         }
     }
 

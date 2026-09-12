@@ -3,7 +3,6 @@ package com.winlator.core;
 import android.content.Context;
 import android.content.SharedPreferences;
 import androidx.collection.ArrayMap;
-import android.util.Log;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -18,6 +17,7 @@ import javax.microedition.khronos.egl.EGLContext;
 import javax.microedition.khronos.egl.EGLDisplay;
 import javax.microedition.khronos.egl.EGLSurface;
 import javax.microedition.khronos.opengles.GL10;
+import timber.log.Timber;
 
 public abstract class GPUHelper {
     public static int VK_API_VERSION_1_3 = vkMakeVersion(1, 3, 0);
@@ -42,7 +42,7 @@ public abstract class GPUHelper {
         try {
             return apiVersionFuture.getNow(VK_API_VERSION_1_3);
         } catch (CompletionException ex) {
-            Log.e("GPUHelper", "Failed to get Vulkan API version", ex);
+            Timber.tag("GPUHelper").e(ex, "Failed to get Vulkan API version");
             return VK_API_VERSION_1_3;
         }
     }
@@ -53,10 +53,10 @@ public abstract class GPUHelper {
         try {
             return vkGetApiVersionSafe() & 0xFFF;
         } catch (UnsatisfiedLinkError e) {
-            Log.e("GPUHelper", "Failed to load Vulkan library", e);
+            Timber.tag("GPUHelper").e(e, "Failed to load Vulkan library");
             return 0; // Fallback if library not loaded
         } catch (Exception e) {
-            Log.e("GPUHelper", "Failed to get Vulkan version patch", e);
+            Timber.tag("GPUHelper").e(e, "Failed to get Vulkan version patch");
             return 0; // Fallback for any other error
         }
     }

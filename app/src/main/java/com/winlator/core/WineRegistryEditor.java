@@ -1,7 +1,5 @@
 package com.winlator.core;
 
-import android.util.Log;
-
 import com.winlator.math.Mathf;
 
 import java.io.BufferedReader;
@@ -17,6 +15,7 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.function.ToIntFunction;
+import timber.log.Timber;
 
 public class WineRegistryEditor implements Closeable {
     private final File file;
@@ -68,7 +67,7 @@ public class WineRegistryEditor implements Closeable {
                 cloneFile.createNewFile();
             }
             catch (IOException e) {
-                Log.e("WineRegistryEditor", "Failed to set up editor: " + e);
+                Timber.tag("WineRegistryEditor").e("Failed to set up editor: " + e);
             }
         }
         else FileUtils.copy(file, cloneFile);
@@ -147,7 +146,7 @@ public class WineRegistryEditor implements Closeable {
             success = true;
         }
         catch (IOException e) {
-            Log.e("WineRegistryEditor", "Failed to create key: " + e);
+            Timber.tag("WineRegistryEditor").e("Failed to create key: " + e);
         }
 
         if (success) {
@@ -243,7 +242,7 @@ public class WineRegistryEditor implements Closeable {
             success = reader.read(buffer) == buffer.length;
         }
         catch (IOException e) {
-            Log.e("WineRegistryEditor", "Failed to get raw value: " + e);
+            Timber.tag("WineRegistryEditor").e("Failed to get raw value: " + e);
         }
         return success ? unescape(new String(buffer)) : null;
     }
@@ -287,7 +286,7 @@ public class WineRegistryEditor implements Closeable {
             success = true;
         }
         catch (IOException e) {
-            Log.e("WineRegistryEditor", "Failed to set raw value: " + e);
+            Timber.tag("WineRegistryEditor").e("Failed to set raw value: " + e);
         }
 
         if (success) {
@@ -466,7 +465,7 @@ public class WineRegistryEditor implements Closeable {
             success = true;
         }
         catch (IOException e) {
-            Log.e("WineRegistryEditor", "Failed to remove region: " + e);
+            Timber.tag("WineRegistryEditor").e("Failed to remove region: " + e);
         }
 
         if (success) {

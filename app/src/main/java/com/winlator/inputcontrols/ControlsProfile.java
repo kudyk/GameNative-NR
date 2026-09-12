@@ -1,8 +1,6 @@
 package com.winlator.inputcontrols;
 
 import android.content.Context;
-import android.util.Log;
-
 import androidx.annotation.NonNull;
 
 import com.winlator.core.FileUtils;
@@ -19,6 +17,7 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
+import timber.log.Timber;
 
 public class ControlsProfile implements Comparable<ControlsProfile> {
     public static final float DEFAULT_CURSOR_SPEED = 1.0f;
@@ -375,7 +374,7 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
     public boolean saveElementsForLayoutSize(int layoutWidth, int layoutHeight) {
         if (elementSourceOverride != null) return false;
         File file = getProfileFile(context, id);
-        Log.d("ControlsProfile", "Saving profile: " + name + " (ID: " + id + ") to " + file.getAbsolutePath());
+        Timber.tag("ControlsProfile").d("Saving profile: " + name + " (ID: " + id + ") to " + file.getAbsolutePath());
 
         try {
             // Preserve profile sections and metadata managed outside this runtime model.
@@ -466,14 +465,14 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
             else if (radialMenusLoaded) data.remove("radialMenus");
 
             if (!FileUtils.writeString(file, data.toString())) {
-                Log.e("ControlsProfile", "Failed to write profile: " + name + " (ID: " + id + ")");
+                Timber.tag("ControlsProfile").e("Failed to write profile: " + name + " (ID: " + id + ")");
                 return false;
             }
-            Log.d("ControlsProfile", "Profile saved successfully: " + name + " (controllers: " + controllersJSONArray.length() + ", elements: " + elementsJSONArray.length() + ")");
+            Timber.tag("ControlsProfile").d("Profile saved successfully: " + name + " (controllers: " + controllersJSONArray.length() + ", elements: " + elementsJSONArray.length() + ")");
             return true;
         }
         catch (Exception e) {
-            Log.e("ControlsProfile", "Failed to save profile: " + name + " (ID: " + id + ")", e);
+            Timber.tag("ControlsProfile").e(e, "Failed to save profile: " + name + " (ID: " + id + ")");
             return false;
         }
     }
@@ -557,7 +556,7 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
             radialMenusLoaded = true;
         }
         catch (Exception e) {
-            Log.e("ControlsProfile", "Failed to load radial menus for profile: " + name + " (ID: " + id + ")", e);
+            Timber.tag("ControlsProfile").e(e, "Failed to load radial menus for profile: " + name + " (ID: " + id + ")");
             radialMenus.add(RadialMenu.createDefault());
             radialMenusLoaded = true;
         }
@@ -570,17 +569,17 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
         controllersLoaded = false;
 
         File file = getProfileFile(context, id);
-        Log.d("ControlsProfile", "Loading controllers for profile: " + name + " (ID: " + id + ") from " + file.getAbsolutePath());
+        Timber.tag("ControlsProfile").d("Loading controllers for profile: " + name + " (ID: " + id + ") from " + file.getAbsolutePath());
 
         if (!file.isFile()) {
-            Log.d("ControlsProfile", "Profile file does not exist: " + name);
+            Timber.tag("ControlsProfile").d("Profile file does not exist: " + name);
             return controllers;
         }
 
         try {
             JSONObject profileJSONObject = new JSONObject(FileUtils.readString(file));
             if (!profileJSONObject.has("controllers")) {
-                Log.d("ControlsProfile", "No controllers section in profile: " + name);
+                Timber.tag("ControlsProfile").d("No controllers section in profile: " + name);
                 controllersLoaded = true;
                 return controllers;
             }
@@ -608,11 +607,11 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
                 controllers.add(controller);
             }
             controllersLoaded = true;
-            Log.d("ControlsProfile", "Loaded " + controllers.size() + " controllers for profile: " + name);
+            Timber.tag("ControlsProfile").d("Loaded " + controllers.size() + " controllers for profile: " + name);
         }
         catch (Exception e) {
-            Log.e("ControlsProfile", "Failed to load controllers for profile: " + name + " (ID: " + id + ")", e);
-            e.printStackTrace();
+            Timber.tag("ControlsProfile").e(e, "Failed to load controllers for profile: " + name + " (ID: " + id + ")");
+            Timber.e(e);
         }
         return controllers;
     }
@@ -624,11 +623,11 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
         }
 
         File file = getProfileFile(context, id);
-        Log.d("ControlsProfile", "Loading elements for profile: " + name + " (ID: " + id + ") from " + file.getAbsolutePath());
+        Timber.tag("ControlsProfile").d("Loading elements for profile: " + name + " (ID: " + id + ") from " + file.getAbsolutePath());
 
         if (!file.isFile()) {
             resetElements();
-            Log.d("ControlsProfile", "Profile file does not exist: " + name);
+            Timber.tag("ControlsProfile").d("Profile file does not exist: " + name);
             return;
         }
 
@@ -637,7 +636,7 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
         }
         catch (Exception e) {
             resetElements();
-            Log.e("ControlsProfile", "Failed to load profile JSON: " + name + " (ID: " + id + ")", e);
+            Timber.tag("ControlsProfile").e(e, "Failed to load profile JSON: " + name + " (ID: " + id + ")");
         }
     }
 
@@ -659,7 +658,7 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
 
         // Check if view has valid dimensions before loading
         if (inputControlsView.getMaxWidth() == 0 || inputControlsView.getMaxHeight() == 0) {
-            Log.w("ControlsProfile", "Cannot load elements - view has no dimensions yet (width: " +
+            Timber.tag("ControlsProfile").w("Cannot load elements - view has no dimensions yet (width: " +
                 inputControlsView.getWidth() + ", height: " + inputControlsView.getHeight() + ")");
             return;
         }
@@ -677,7 +676,7 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
                 try {
                     element.setType(ControlElement.Type.valueOf(elementJSONObject.getString("type")));
                 } catch (IllegalArgumentException e) {
-                    Log.w("ControlsProfile", "Skipping element with unknown type: " + elementJSONObject.getString("type"));
+                    Timber.tag("ControlsProfile").w("Skipping element with unknown type: " + elementJSONObject.getString("type"));
                     continue;
                 }
                 if (elementJSONObject.has("lookThrough")) {
@@ -729,11 +728,11 @@ public class ControlsProfile implements Comparable<ControlsProfile> {
             }
             if (autoFitLayout) fitElementsToBounds(inputControlsView, sourceLayouts);
             elementsLoaded = true;
-            Log.d("ControlsProfile", "Loaded " + elements.size() + " elements for profile: " + name + " (virtualGamepad: " + virtualGamepad + ")");
+            Timber.tag("ControlsProfile").d("Loaded " + elements.size() + " elements for profile: " + name + " (virtualGamepad: " + virtualGamepad + ")");
         }
         catch (Exception e) {
-            Log.e("ControlsProfile", "Failed to load elements for profile: " + name + " (ID: " + id + ")", e);
-            e.printStackTrace();
+            Timber.tag("ControlsProfile").e(e, "Failed to load elements for profile: " + name + " (ID: " + id + ")");
+            Timber.e(e);
         }
     }
 

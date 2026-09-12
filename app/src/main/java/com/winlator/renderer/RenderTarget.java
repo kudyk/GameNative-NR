@@ -1,7 +1,7 @@
 package com.winlator.renderer;
 
 import android.opengl.GLES20;
-import android.util.Log;
+import timber.log.Timber;
 
 public class RenderTarget extends Texture {
     private static final String TAG = "RenderTarget";
@@ -53,7 +53,7 @@ public class RenderTarget extends Texture {
 
         int framebufferStatus = GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER);
         if (framebufferStatus != GLES20.GL_FRAMEBUFFER_COMPLETE) {
-            Log.e(TAG, "Framebuffer incomplete: 0x" + Integer.toHexString(framebufferStatus));
+            Timber.tag(TAG).e("Framebuffer incomplete: 0x" + Integer.toHexString(framebufferStatus));
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
             destroy();

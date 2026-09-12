@@ -3,6 +3,7 @@ package com.winlator.xserver;
 import com.winlator.xserver.events.Event;
 
 import java.io.IOException;
+import timber.log.Timber;
 
 public class EventListener {
     public final XClient client;
@@ -26,7 +27,7 @@ public class EventListener {
             event.send(client.getSequenceNumber(), client.getOutputStream());
         }
         catch (IOException e) {
-            e.printStackTrace();
+            Timber.e(e);
         }
     }
 }
