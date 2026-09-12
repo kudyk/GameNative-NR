@@ -12,7 +12,8 @@
 #include <unistd.h>
 
 #define LOG_TAG "XConnectorPatch"
-#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
+static bool loggingEnabled = true;
+#define LOGD(...) if (loggingEnabled) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define MAX_EVENTS 10
 #define MAX_TRACKED_FDS 1024
 
@@ -97,6 +98,11 @@ static int waitForPollEvents(struct pollfd *pfds, nfds_t count) {
         LOGD("poll failed errno=%d (%s)", errno, strerror(errno));
         return -1;
     }
+}
+
+JNIEXPORT void JNICALL
+Java_com_winlator_xconnector_XConnectorEpollNative_setLoggingEnabled(JNIEnv *env, jclass clazz, jboolean enabled) {
+    loggingEnabled = enabled;
 }
 
 JNIEXPORT jint JNICALL
