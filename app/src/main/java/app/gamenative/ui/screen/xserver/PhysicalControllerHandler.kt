@@ -23,6 +23,24 @@ import timber.log.Timber
 /**
  * Standalone handler for physical controller input that works independently of view visibility.
  * Applies profile bindings to convert physical controller input into virtual gamepad state.
+ *
+ * ARCHITECTURE (accumulate + fixed-tick flush):
+ * Raw Android input events (onGenericMotionEvent / onKeyEvent) NEVER talk to XServer/WinHandler
+ * directly for the continuous streams (analog sticks, triggers, stick-driven mouse-look). They
+ * only ever update in-memory state as fast as Android delivers them - this is intentionally cheap
+ * and unthrottled (no locks, no I/O, just field writes).
+ *
+ * A single [flushTimer] ticks at a fixed rate (configurable via [setInputPollRateHz], default
+ * 60 Hz; disabling throttling via [setInputThrottlingEnabled] simply raises the tick rate to
+ * [UNTHROTTLED_HZ] instead of taking a different code path). On every tick, [flushTick] reads the
+ * latest accumulated controller state, diffs it against what was active on the previous tick, and
+ * only for the bindings that actually changed does it call into XServer (key/mouse injection) or
+ * WinHandler (gamepad state - both the UDP channel and the gamepad_shm/evshim memory-mapped
+ * channel are flushed together, exactly once per tick, from this single place).
+ *
+ * Digital button events (onKeyEvent - A/B/X/Y/L1/R1/Start/Select/D-pad-as-buttons) are NOT part of
+ * this accumulator: Android KeyEvents are already discrete edge events (down/up), not a polled
+ * stream, so there is nothing to accumulate - they are dispatched immediately, same as before.
  */
 class PhysicalControllerHandler(
     private var profile: ControlsProfile?,
@@ -53,6 +71,12 @@ class PhysicalControllerHandler(
         private const val UNKNOWN_DEVICE_ID = -1
         private const val SEQUENCE_PRESS_MS = 80L
         private const val STICK_RELEASE_THRESHOLD = 0.10f
+
+        /** Tick rate used when the user disables throttling from the quick menu. */
+        private const val UNTHROTTLED_HZ = 120
+        private const val DEFAULT_HZ = 60
+        private const val MIN_HZ = 15
+        private const val MAX_HZ = 240
     }
 
     private val TAG = "gncontrol"
@@ -60,7 +84,6 @@ class PhysicalControllerHandler(
     private val mouseMoveRemainder = PointF(0f, 0f)
     private val mouseMoveContributions = mutableMapOf<MouseMoveSource, Float>()
     private val sequenceHandler = Handler(Looper.getMainLooper())
-    private var mouseMoveTimer: Timer? = null
     private var scrollRepeatTimer: Timer? = null
     private val scrollRepeatLock = Any()
     private val activeScrollBindings = mutableSetOf<Binding>()
@@ -71,23 +94,69 @@ class PhysicalControllerHandler(
         MotionEvent.AXIS_Z,
         MotionEvent.AXIS_RZ,
         MotionEvent.AXIS_HAT_X,
-        MotionEvent.AXIS_HAT_Y
+        MotionEvent.AXIS_HAT_Y,
     )
     private val joystickValues = FloatArray(joystickAxes.size)
-    private var lastJoystickProcessTime = 0L
-    private var minPollIntervalNs = 1_000_000_000L / 60
-    private var inputThrottlingEnabled = true
+
+    // ---- Accumulate + fixed-tick flush -------------------------------------------------------
+    // Devices that have delivered at least one MotionEvent this session. onGenericMotionEvent only
+    // ever adds to this set and updates the controller's own state fields (cheap); flushTick() is
+    // the only place that reads it and turns it into actual injected input.
+    private val trackedDeviceIds = mutableSetOf<Int>()
+    private var flushTimer: Timer? = null
+    private var flushIntervalMs = 1000L / DEFAULT_HZ
+    private var configuredHz = DEFAULT_HZ
+    private var throttlingEnabled = true
+    private val flushLock = Any()
 
     fun setInputPollRateHz(hz: Int) {
-        minPollIntervalNs = 1_000_000_000L / hz.coerceIn(15, 240)
+        configuredHz = hz.coerceIn(MIN_HZ, MAX_HZ)
+        rescheduleFlushTimer()
     }
 
     fun setInputThrottlingEnabled(enabled: Boolean) {
-        inputThrottlingEnabled = enabled
+        throttlingEnabled = enabled
+        rescheduleFlushTimer()
+    }
+
+    private fun effectiveHz(): Int = if (throttlingEnabled) configuredHz else UNTHROTTLED_HZ
+
+    private fun rescheduleFlushTimer() {
+        val newIntervalMs = 1000L / effectiveHz()
+        synchronized(flushLock) {
+            if (newIntervalMs == flushIntervalMs && flushTimer != null) return
+            flushIntervalMs = newIntervalMs
+            flushTimer?.cancel()
+            flushTimer = null
+            startFlushTimerLocked()
+        }
+    }
+
+    private fun startFlushTimerLocked() {
+        if (flushTimer != null) return
+        val timer = Timer()
+        timer.schedule(object : TimerTask() {
+            override fun run() {
+                // Hop back onto the main thread: flushTick() mutates the same maps/sets
+                // (activeAxisBindings, activeButtonBindings, ...) that onKeyEvent touches from
+                // the main thread, so everything needs to stay on one thread - the raw Timer
+                // thread itself must never call into handleInputEvent()/processJoystickInput().
+                sequenceHandler.post { flushTick() }
+            }
+        }, 0, flushIntervalMs)
+        flushTimer = timer
+    }
+
+    private fun stopFlushTimer() {
+        synchronized(flushLock) {
+            flushTimer?.cancel()
+            flushTimer = null
+        }
     }
 
     // track which axis keycodes are currently "pressed" so we only release on actual transitions.
-    // accessed only from main thread (MotionEvent dispatch + Compose lifecycle), no sync needed.
+    // accessed only from the flush-timer thread (single background Timer thread) once the
+    // accumulate/flush split is in place - see flushTick().
     private val activeAxisBindings = mutableSetOf<PhysicalInputSource>()
     private val activeButtonBindings = mutableMapOf<PhysicalInputSource, BindingCombo>()
     private val activeTriggerBindings = mutableMapOf<PhysicalInputSource, BindingCombo>()
@@ -102,6 +171,10 @@ class PhysicalControllerHandler(
     private var radialMenuOpenedFromMotion = false
     private var radialMenuOpenerKeyCode = KeyEvent.KEYCODE_UNKNOWN
     private var radialMenuOpenerDeviceId = UNKNOWN_DEVICE_ID
+
+    init {
+        if (profile != null) startFlushTimerLocked()
+    }
 
     private fun releaseActiveAxes(
         exceptSource: PhysicalInputSource? = null,
@@ -158,8 +231,14 @@ class PhysicalControllerHandler(
         clearScrollRepeats()
         closeRadialMenuIfOpen(commit = false)
         activeSequenceTriggerBindings.clear()
+        trackedDeviceIds.clear()
         sendGamepadState()
         this.profile = profile
+        if (profile != null) {
+            synchronized(flushLock) { startFlushTimerLocked() }
+        } else {
+            stopFlushTimer()
+        }
         Timber.tag(TAG).d("PhysicalControllerHandler: Profile set to ${profile?.name}")
     }
 
@@ -167,6 +246,7 @@ class PhysicalControllerHandler(
      * Clean up resources when handler is destroyed
      */
     fun cleanup() {
+        stopFlushTimer()
         releaseActiveBindings(activeButtonBindings)
         releaseActiveBindings(activeTriggerBindings, fromMotion = true)
         releaseGyroModifierSources()
@@ -175,12 +255,14 @@ class PhysicalControllerHandler(
         clearMouseMoveContributions()
         clearScrollRepeats()
         activeSequenceTriggerBindings.clear()
+        trackedDeviceIds.clear()
         showKeyboardPressed = false
         closeRadialMenuIfOpen(commit = false)
         sendGamepadState()
     }
 
     fun onInputDeviceRemoved(deviceId: Int) {
+        trackedDeviceIds.remove(deviceId)
         cancelActiveSequences()
         releaseActiveBindings(activeButtonBindings, deviceId)
         releaseActiveBindings(activeTriggerBindings, deviceId, fromMotion = true)
@@ -196,7 +278,8 @@ class PhysicalControllerHandler(
 
     /**
      * Handle physical controller button events.
-     * Extracted from InputControlsView.onKeyEvent()
+     * Digital buttons are discrete Android KeyEvents, not a polled stream - there is nothing to
+     * accumulate here, so these are still dispatched immediately, same as before.
      */
     fun onKeyEvent(event: KeyEvent): Boolean {
         if (profile != null && event.repeatCount == 0) {
@@ -287,33 +370,50 @@ class PhysicalControllerHandler(
     }
 
     /**
-     * Handle physical controller analog stick and trigger events.
+     * Accumulate-only entry point for physical controller analog stick and trigger events.
+     * This is intentionally cheap: it updates the controller's own state fields (in-memory,
+     * no I/O, no locks) and remembers that this device has live input. It NEVER calls into
+     * XServer or WinHandler directly - that only ever happens from [flushTick], once per tick,
+     * for whichever devices are in [trackedDeviceIds].
+     *
      * Extracted from InputControlsView.onGenericMotionEvent()
      */
     fun onGenericMotionEvent(event: MotionEvent): Boolean {
-        if (profile != null) {
-            val controller = profile?.getController(event.deviceId) ?: return false
+        val controller = profile?.getController(event.deviceId) ?: return false
 
-            // 1. Update internal state ALWAYS (to not miss fast button presses/releases)
-            val stateChanged = controller.updateStateFromMotionEvent(event)
-            if (!stateChanged) return false
+        // Update internal state ALWAYS, at whatever rate Android delivers events (no throttling
+        // here - this is pure field writes, not I/O). The fixed-rate flush timer is the only
+        // thing that turns this into actual injected input.
+        controller.updateStateFromMotionEvent(event)
+        trackedDeviceIds.add(event.deviceId)
 
-            // 2. Throttle only the HEAVY logic (mapping to XServer keys and Wine packets)
-            val now = System.nanoTime()
-            val isNeutral = !controller.state.isPressed(ExternalController.IDX_BUTTON_L2.toInt()) &&
-                            !controller.state.isPressed(ExternalController.IDX_BUTTON_R2.toInt()) &&
-                            Math.abs(controller.state.thumbLX) < ControlElement.STICK_DEAD_ZONE &&
-                            Math.abs(controller.state.thumbLY) < ControlElement.STICK_DEAD_ZONE &&
-                            Math.abs(controller.state.thumbRX) < ControlElement.STICK_DEAD_ZONE &&
-                            Math.abs(controller.state.thumbRY) < ControlElement.STICK_DEAD_ZONE
+        // We own this device once a profile is bound to it: always report "handled" so callers
+        // never fall through to a secondary handler (e.g. WinHandler's own passthrough) for the
+        // same physical sample - that fallback path independently re-parses the same MotionEvent
+        // and re-sends gamepad state through its own channel, which is exactly the double
+        // processing / duplicate Wine updates this design avoids.
+        return true
+    }
 
-            // Allow neutral state (release) to pass throttle to prevent WASD sticking
-            if (inputThrottlingEnabled && !isNeutral && now - lastJoystickProcessTime < minPollIntervalNs) return true
+    private fun sendGamepadState() {
+        gamepadStateSender(profile?.gamepadState)
+    }
 
-            lastJoystickProcessTime = now
-            if (radialMenuPressed && !isRadialMenuOpenerDevice(event.deviceId)) return true
-
-            if (radialMenuPressed) {
+    /**
+     * Runs on the flush timer thread at [effectiveHz]. Processes every device that has delivered
+     * at least one motion sample, flushes accumulated mouse-look movement as a single delta, and
+     * sends the (possibly unchanged - WinHandler itself diffs before actually writing/notifying)
+     * gamepad state exactly once for this tick.
+     */
+    private fun flushTick() {
+        val currentProfile = profile ?: return
+        if (radialMenuPressed) {
+            // While the radial menu is open, only the opener device drives it; still keep other
+            // devices' raw axis state up to date so nothing "sticks" once the menu closes, but
+            // don't dispatch bindings for them.
+            for (deviceId in trackedDeviceIds.toList()) {
+                if (!isRadialMenuOpenerDevice(deviceId)) continue
+                val controller = currentProfile.getController(deviceId) ?: continue
                 updateRadialMenuVector(controller)
                 if (radialMenuOpenedFromMotion && !isRadialMenuMotionOpenerPressed(controller)) {
                     handleInputEvent(
@@ -322,94 +422,82 @@ class PhysicalControllerHandler(
                         0f,
                         fromMotion = true,
                         sourceKeyCode = radialMenuOpenerKeyCode,
-                        sourceDeviceId = event.deviceId,
+                        sourceDeviceId = deviceId,
                         sourceController = controller,
                     )
                 }
-                return true
             }
-
-            // Process trigger buttons (L2/R2)
-            var controllerBinding = controller.getControllerBinding(KeyEvent.KEYCODE_BUTTON_L2)
-            if (controllerBinding != null) {
-                handleTriggerBinding(
-                    KeyEvent.KEYCODE_BUTTON_L2,
-                    controllerBinding.binding,
-                    controllerBinding.bindingCombo,
-                    controller.state.triggerL > 0f,
-                    controller.state.triggerL,
-                    fromMotion = true,
-                    sourceKeyCode = KeyEvent.KEYCODE_BUTTON_L2,
-                    sourceDeviceId = event.deviceId,
-                    sourceController = controller,
-                )
-                if (radialMenuPressed) {
-                    sendGamepadState()
-                    return true
-                }
+        } else {
+            for (deviceId in trackedDeviceIds.toList()) {
+                val controller = currentProfile.getController(deviceId) ?: continue
+                processTriggers(controller, deviceId)
+                if (radialMenuPressed) break // a trigger binding may have just opened the menu
+                processJoystickInput(controller, deviceId)
+                if (radialMenuPressed) break
             }
-
-            controllerBinding = controller.getControllerBinding(KeyEvent.KEYCODE_BUTTON_R2)
-            if (controllerBinding != null) {
-                handleTriggerBinding(
-                    KeyEvent.KEYCODE_BUTTON_R2,
-                    controllerBinding.binding,
-                    controllerBinding.bindingCombo,
-                    controller.state.triggerR > 0f,
-                    controller.state.triggerR,
-                    fromMotion = true,
-                    sourceKeyCode = KeyEvent.KEYCODE_BUTTON_R2,
-                    sourceDeviceId = event.deviceId,
-                    sourceController = controller,
-                )
-                if (radialMenuPressed) {
-                    sendGamepadState()
-                    return true
-                }
-            }
-
-            // Process analog stick input
-            processJoystickInput(controller, event.deviceId)
-
-            sendGamepadState()
-            return true
         }
-        return false
+
+        flushMouseMove()
+        sendGamepadState()
     }
 
-    private fun sendGamepadState() {
-        gamepadStateSender(profile?.gamepadState)
+    private fun processTriggers(controller: ExternalController, deviceId: Int) {
+        var controllerBinding = controller.getControllerBinding(KeyEvent.KEYCODE_BUTTON_L2)
+        if (controllerBinding != null) {
+            handleTriggerBinding(
+                KeyEvent.KEYCODE_BUTTON_L2,
+                controllerBinding.binding,
+                controllerBinding.bindingCombo,
+                controller.state.triggerL > 0f,
+                controller.state.triggerL,
+                fromMotion = true,
+                sourceKeyCode = KeyEvent.KEYCODE_BUTTON_L2,
+                sourceDeviceId = deviceId,
+                sourceController = controller,
+            )
+            if (radialMenuPressed) return
+        }
+
+        controllerBinding = controller.getControllerBinding(KeyEvent.KEYCODE_BUTTON_R2)
+        if (controllerBinding != null) {
+            handleTriggerBinding(
+                KeyEvent.KEYCODE_BUTTON_R2,
+                controllerBinding.binding,
+                controllerBinding.bindingCombo,
+                controller.state.triggerR > 0f,
+                controller.state.triggerR,
+                fromMotion = true,
+                sourceKeyCode = KeyEvent.KEYCODE_BUTTON_R2,
+                sourceDeviceId = deviceId,
+                sourceController = controller,
+            )
+        }
     }
 
     /**
-     * Create a timer for continuous mouse movement injection.
-     * Runs at 60 FPS, injecting mouse deltas based on mouseMoveOffset.
+     * Flush accumulated stick/button-driven mouse-look movement as a single delta per tick.
+     * Replaces the old dedicated 1000/60 Timer - now driven by the same flush tick as everything
+     * else, at the user-configured rate.
      */
-    private fun createMouseMoveTimer() {
-        if (profile != null && mouseMoveTimer == null) {
-            mouseMoveTimer = Timer()
-            mouseMoveTimer?.schedule(object : TimerTask() {
-                override fun run() {
-                    // Skip injection if movement is below deadzone to save CPU cycles
-                    val magnitude = Math.sqrt((mouseMoveOffset.x * mouseMoveOffset.x + mouseMoveOffset.y * mouseMoveOffset.y).toDouble())
-                    if (magnitude < 0.05) return
+    private fun flushMouseMove() {
+        if (mouseMoveContributions.isEmpty()) return
 
-                    val cursorSpeed = profile?.cursorSpeed ?: 1f
+        val magnitude = Math.sqrt((mouseMoveOffset.x * mouseMoveOffset.x + mouseMoveOffset.y * mouseMoveOffset.y).toDouble())
+        if (magnitude < 0.05) return
 
-                    val rawDeltaX = mouseMoveOffset.x * 10f * cursorSpeed + mouseMoveRemainder.x
-                    val rawDeltaY = mouseMoveOffset.y * 10f * cursorSpeed + mouseMoveRemainder.y
+        val cursorSpeed = profile?.cursorSpeed ?: 1f
 
-                    val moveX = rawDeltaX.toInt()
-                    val moveY = rawDeltaY.toInt()
+        val rawDeltaX = mouseMoveOffset.x * 10f * cursorSpeed + mouseMoveRemainder.x
+        val rawDeltaY = mouseMoveOffset.y * 10f * cursorSpeed + mouseMoveRemainder.y
 
-                    mouseMoveRemainder.x = rawDeltaX - moveX
-                    mouseMoveRemainder.y = rawDeltaY - moveY
+        val moveX = rawDeltaX.toInt()
+        val moveY = rawDeltaY.toInt()
 
-                    if (moveX != 0 || moveY != 0) {
-                        xServer?.injectPointerMoveDelta(moveX, moveY)
-                    }
-                }
-            }, 0, 1000 / 60)
+        mouseMoveRemainder.x = rawDeltaX - moveX
+        mouseMoveRemainder.y = rawDeltaY - moveY
+
+        if (moveX != 0 || moveY != 0) {
+            xServer?.injectPointerMoveDelta(moveX, moveY)
         }
     }
 
@@ -429,7 +517,6 @@ class PhysicalControllerHandler(
                 1f
             }
             mouseMoveContributions[MouseMoveSource(sourceDeviceId, sourceKeyCode, binding)] = contribution
-            createMouseMoveTimer()
         } else {
             mouseMoveContributions.keys.removeAll { source ->
                 source.binding == binding &&
@@ -449,17 +536,12 @@ class PhysicalControllerHandler(
                 mouseMoveOffset.y += contribution
             }
         }
-        if (mouseMoveContributions.isEmpty()) {
-            mouseMoveTimer?.cancel()
-            mouseMoveTimer = null
-        }
     }
 
     private fun clearMouseMoveContributions() {
         mouseMoveContributions.clear()
         mouseMoveOffset.set(0f, 0f)
-        mouseMoveTimer?.cancel()
-        mouseMoveTimer = null
+        mouseMoveRemainder.set(0f, 0f)
     }
 
     private fun handleScrollBinding(binding: Binding, isActionDown: Boolean): Boolean {
@@ -518,7 +600,12 @@ class PhysicalControllerHandler(
     }
 
     /**
-     * Process analog stick input and apply bindings.
+     * Process analog stick input and apply bindings. Called once per tick per tracked device from
+     * [flushTick] - reads whatever the controller's state currently is (the latest accumulated
+     * sample), diffs against [activeAxisBindings] and dispatches only on real transitions for
+     * digital (WASD-style) bindings, same edge-detection as before, just decoupled from raw
+     * MotionEvent arrival rate.
+     *
      * Extracted from InputControlsView.processJoystickInput()
      */
     private fun processJoystickInput(controller: ExternalController, deviceId: Int) {
@@ -551,6 +638,8 @@ class PhysicalControllerHandler(
 
                 controller.getControllerBinding(activeKey)?.let {
                     // KEY POINT: Only inject digital keys (WASD) if they weren't already pressed
+                    // on the previous tick - this is the "накопление -> одна отправка на
+                    // изменение" behaviour for stick-to-keyboard remaps.
                     if (isAnalog || !wasAlreadyActive || it.bindingCombo.isSequence) {
                         handleInputEvent(
                             it.bindingCombo,
