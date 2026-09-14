@@ -1357,36 +1357,36 @@ private fun PerformanceHudQuickMenuTab(
                     },
                     accentColor = accentColor,
                 )
+            }
+        }
 
-                Spacer(modifier = Modifier.height(8.dp))
-                QuickMenuToggleRow(
-                    title = stringResource(R.string.input_throttle_toggle),
-                    enabled = inputThrottlingEnabled,
-                    onToggle = { onInputThrottlingEnabledChanged(!inputThrottlingEnabled) },
+        Spacer(modifier = Modifier.height(8.dp))
+        QuickMenuToggleRow(
+            title = stringResource(R.string.input_throttle_toggle),
+            enabled = inputThrottlingEnabled,
+            onToggle = { onInputThrottlingEnabledChanged(!inputThrottlingEnabled) },
+            accentColor = accentColor,
+        )
+
+        AnimatedVisibility(
+            visible = inputThrottlingEnabled,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut(),
+        ) {
+            Column {
+                Spacer(modifier = Modifier.height(4.dp))
+                QuickMenuAdjustmentRow(
+                    title = stringResource(R.string.input_poll_rate),
+                    valueText = "$inputPollRateHz Hz",
+                    progress = fpsLimiterProgress(inputPollRateHz, 240),
+                    onDecrease = {
+                        onInputPollRateHzChanged(previousFpsLimiterValue(inputPollRateHz, 240))
+                    },
+                    onIncrease = {
+                        onInputPollRateHzChanged(nextFpsLimiterValue(inputPollRateHz, 240))
+                    },
                     accentColor = accentColor,
                 )
-
-                AnimatedVisibility(
-                    visible = inputThrottlingEnabled,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut(),
-                ) {
-                    Column {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        QuickMenuAdjustmentRow(
-                            title = stringResource(R.string.input_poll_rate),
-                            valueText = "$inputPollRateHz Hz",
-                            progress = fpsLimiterProgress(inputPollRateHz, 240),
-                            onDecrease = {
-                                onInputPollRateHzChanged(previousFpsLimiterValue(inputPollRateHz, 240))
-                            },
-                            onIncrease = {
-                                onInputPollRateHzChanged(nextFpsLimiterValue(inputPollRateHz, 240))
-                            },
-                            accentColor = accentColor,
-                        )
-                    }
-                }
             }
         }
 

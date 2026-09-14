@@ -44,9 +44,12 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
@@ -68,6 +71,7 @@ public class WinHandler {
     private volatile int currentControllerId;
     private byte dinputMapperType;
     private final List<Integer> gamepadClients;
+    private final Map<Integer, byte[]> lastSentUdpDataByPort = new HashMap<>();
     private boolean initReceived;
     private InetAddress localhost;
     private OnGetProcessInfoListener onGetProcessInfoListener;
@@ -79,14 +83,6 @@ public class WinHandler {
     private final DatagramPacket sendPacket;
     private DatagramSocket socket;
     private final ArrayList<Integer> xinputProcesses;
-
-    private static class GamepadStateUpdateTask implements Runnable {
-        final int port;
-        private final Runnable action;
-        GamepadStateUpdateTask(int port, Runnable action) { this.port = port; this.action = action; }
-        @Override public void run() { action.run(); }
-    }
-
     private final XServer xServer;
     private final XServerRendererView xServerView;
 
@@ -139,6 +135,13 @@ public class WinHandler {
         return "id=" + device.getId()
                 + " name=\"" + device.getName() + "\""
                 + " descriptor=\"" + device.getDescriptor() + "\"";
+    }
+
+    private static class GamepadStateUpdateTask implements Runnable {
+        final int port;
+        private final Runnable action;
+        GamepadStateUpdateTask(int port, Runnable action) { this.port = port; this.action = action; }
+        @Override public void run() { action.run(); }
     }
 
     public enum PreferredInputApi {
@@ -717,6 +720,7 @@ public class WinHandler {
                 this.currentController = null;
                 this.gamepadClients.clear();
                 this.xinputProcesses.clear();
+                this.lastSentUdpDataByPort.clear();
                 return;
             case RequestCodes.CURSOR_POS_FEEDBACK:
                 short x = this.receiveData.getShort();
@@ -953,8 +957,6 @@ public class WinHandler {
         }
     }
 
-    private final byte[] lastSentUdpData = new byte[100];
-
     public void sendGamepadState() {
         if (!this.initReceived || this.gamepadClients.isEmpty()) {
             return;
@@ -963,37 +965,42 @@ public class WinHandler {
         final boolean useVirtualGamepad = isVirtualGamepadActive();
         final boolean enabled = this.currentController != null || useVirtualGamepad;
 
-        if (!enabled) return;
+        // Capture state data outside the background task
+        final GamepadState stateToCapture = enabled
+                ? (useVirtualGamepad ? profile.getGamepadState() : this.currentController.state)
+                : null;
+        final int deviceId = enabled
+                ? (!useVirtualGamepad ? this.currentController.getDeviceId() : profile.id)
+                : 0;
 
         Iterator<Integer> it = this.gamepadClients.iterator();
         while (it.hasNext()) {
             final int port = it.next();
-            // Capture state data outside the background task
-            final GamepadState stateToCapture = useVirtualGamepad ? profile.getGamepadState() : (this.currentController != null ? this.currentController.state : null);
-            final int deviceId = !useVirtualGamepad ? (this.currentController != null ? this.currentController.getDeviceId() : 0) : profile.id;
-
-            if (stateToCapture == null) continue;
 
             addAction(new GamepadStateUpdateTask(port, () -> {
                 this.sendData.rewind();
                 sendData.put(RequestCodes.GET_GAMEPAD_STATE);
-                sendData.put((byte) 1);
-                this.sendData.putInt(deviceId);
-                stateToCapture.writeTo(this.sendData);
-
-                // Only send if content actually changed
+                sendData.put((byte) (enabled ? 1 : 0));
+                if (enabled) {
+                    this.sendData.putInt(deviceId);
+                    stateToCapture.writeTo(this.sendData);
+                }
+                // Only send if content actually changed since the last packet on THIS port
                 int size = this.sendData.position();
-                boolean changed = false;
                 byte[] currentData = this.sendData.array();
-                for (int i = 0; i < size; i++) {
-                    if (currentData[i] != lastSentUdpData[i]) {
-                        changed = true;
-                        break;
+                byte[] lastSentData = lastSentUdpDataByPort.get(port);
+                boolean changed = lastSentData == null || lastSentData.length != size;
+                if (!changed) {
+                    for (int i = 0; i < size; i++) {
+                        if (currentData[i] != lastSentData[i]) {
+                            changed = true;
+                            break;
+                        }
                     }
                 }
 
                 if (changed) {
-                    System.arraycopy(currentData, 0, lastSentUdpData, 0, size);
+                    lastSentUdpDataByPort.put(port, Arrays.copyOf(currentData, size));
                     sendPacket(port);
                 }
             }));

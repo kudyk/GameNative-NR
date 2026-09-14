@@ -783,14 +783,12 @@ fun XServerScreen(
         val sanitized = hz.coerceIn(15, 240)
         inputPollRateHz = sanitized
         PrefManager.inputPollRateHz = sanitized
-        PluviaApp.inputControlsView?.setInputPollRateHz(sanitized)
         physicalControllerHandler?.setInputPollRateHz(sanitized)
     }
 
     fun applyInputThrottlingEnabled(enabled: Boolean) {
         inputThrottlingEnabled = enabled
         PrefManager.inputThrottlingEnabled = enabled
-        PluviaApp.inputControlsView?.setInputThrottlingEnabled(enabled)
         physicalControllerHandler?.setInputThrottlingEnabled(enabled)
     }
 
@@ -2534,8 +2532,6 @@ fun XServerScreen(
             // Create InputControlsView and add to FrameLayout
             val icView = InputControlsView(context).apply {
                 // Configure InputControlsView
-                setInputThrottlingEnabled(inputThrottlingEnabled)
-                setInputPollRateHz(inputPollRateHz)
                 setXServer(xServerView.getxServer())
                 setTouchpadView(PluviaApp.touchpadView)
                 setGyroSettings(GyroSettings.fromContainer(container))
@@ -2579,6 +2575,9 @@ fun XServerScreen(
                     PluviaApp.radialMenuCoordinator?.setProfile(targetProfile)
 
                     val radialMenuCoordinator = PluviaApp.radialMenuCoordinator
+                    // Defensive: nothing enforces this factory running only once - without
+                    // this, a second run would leave the old handler's flushTimer ticking too.
+                    physicalControllerHandler?.cleanup()
                     physicalControllerHandler = PhysicalControllerHandler(
                         targetProfile,
                         xServerView.getxServer(),
