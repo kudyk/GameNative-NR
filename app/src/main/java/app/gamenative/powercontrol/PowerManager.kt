@@ -59,6 +59,18 @@ object PowerManager {
     private const val GAME_PIN_MAX_RETRIES = 10
     private const val GAME_PIN_RETRY_DELAY_MS = 1000L
 
+    /** How long the launch-time pins wait for Wine and PulseAudio to spawn; live changes don't wait. */
+    private const val BACKGROUND_PIN_LAUNCH_DELAY_MS = 2000L
+    private const val AUDIO_PIN_LAUNCH_DELAY_MS = 500L
+
+    /** A background process, matched against the command line the driver's process listing reports for it. */
+    private class BackgroundProcess(val name: String, val matches: (String) -> Boolean)
+
+    /** Wine/background processes pinned as a group by [pinBackgroundProcesses]/[unpinBackgroundProcesses]. */
+    private val BACKGROUND_PROCESSES: List<BackgroundProcess> =
+        listOf("wineserver", "winhandler.exe", "services.exe").map { name -> BackgroundProcess(name) { it.endsWith(name) } } +
+            BackgroundProcess("libsteambootstrap.so") { it.contains("libsteambootstrap.so") }
+
     private val json = Json {
         encodeDefaults = true
         ignoreUnknownKeys = true
@@ -152,11 +164,39 @@ object PowerManager {
         private set
 
     /**
+     * True while a new game window must not get the container's CPU list re-applied over Power
+     * Control's own pin: Auto pins only when it owns the affinity, Manual always overrides the list.
+     */
+    val holdsGameAffinity: Boolean
+        get() {
+            val profile = currentProfile
+            if (!profile.enablePowerControl) return false
+            return when (profile.gamePinningMode) {
+                GamePinningMode.AUTO -> ownsGameAffinity
+                GamePinningMode.MANUAL -> parseCpuList(profile.manualGamePinCores).isNotEmpty()
+                GamePinningMode.OFF -> false
+            }
+        }
+
+    /**
      * Bumped whenever a pin run starts or is called off, so a retry loop left over from an earlier
      * run stops instead of pinning the game again.
      */
     @Volatile
     private var gamePinGeneration: Int = 0
+
+    /** Same as [gamePinGeneration], for the Wine background group and for PulseAudio respectively. */
+    @Volatile
+    private var backgroundPinGeneration: Int = 0
+
+    @Volatile
+    private var audioPinGeneration: Int = 0
+
+    /**
+     * Held while an affinity change is checked against its generation and applied, so a pin or an
+     * unpin that got superseded meanwhile can never land after the newer one.
+     */
+    private val affinityLock = Any()
 
     /**
      * Autostart with contain dir and application context
@@ -220,15 +260,30 @@ object PowerManager {
     /**
      * Enable or disable in-game power control at runtime. Disabling stops the
      * driver and hands clock control back to the OS; enabling re-initializes
-     * and restarts it when a game is running.
+     * and restarts it when a game is running. CPU pinning is released/re-applied along with it.
      */
+    @Synchronized
     fun setPowerControlEnabled(enabled: Boolean) {
         // Always save the profile
         currentProfile = currentProfile.copy(enablePowerControl = enabled)
 
         if (enabled) {
             startPowerControl()
+            if (isGameStarted) {
+                val processName = pinnedGameProcessName
+                if (processName != null) {
+                    Timber.tag("PowerManager").i("Power control re-enabled, re-pinning $processName")
+                    startGamePin(processName, "power control re-enabled")
+                }
+                pinBackgroundProcesses(initialDelayMs = 0L)
+            }
         } else {
+            if (isGameStarted) {
+                Timber.tag("PowerManager").i("Power control disabled, releasing CPU pinning")
+                // Blocking, so the release finishes before stopPowerControl() shuts the root executor down.
+                unpinGame(blocking = true)
+                unpinBackgroundProcesses(blocking = true)
+            }
             stopPowerControl()
         }
     }
@@ -530,25 +585,42 @@ object PowerManager {
     }
 
     /**
+     * Applies [transform] to the current profile under the same lock as [setPowerProfile], so two
+     * quick UI edits can't both start from the same stale profile and drop one another.
+     */
+    @Synchronized
+    fun updateProfile(transform: (PowerProfile) -> PowerProfile) {
+        setPowerProfile(transform(currentProfile))
+    }
+
+    /**
      * Update the current profile reference.
      * Should be called when the UI changes the active profile.
      */
-    fun setPowerProfile(profile: PowerProfile) {
+    @Synchronized
+    fun setPowerProfile(requested: PowerProfile) {
         val previousProfile = currentProfile
+        val profile = withSeededManualCores(requested)
         currentProfile = profile
 
         // Handle auto-tuning based on profile setting
         if (profile.enablePowerControl) {
-            if (profile.enableAutoTuning) {
-                if (previousProfile.enablePerClusterTuning != profile.enablePerClusterTuning) {
-                    Timber.tag("PowerManager").i(
-                        "Per-cluster tuning changed to ${profile.enablePerClusterTuning}, restarting the tuner"
-                    )
-                    stopAutoTuning()
-                }
-                startAutoTuning()
-            } else {
+            val perClusterChanged = profile.autoTuningMode == AutoTuningMode.AUTO &&
+                previousProfile.enablePerClusterTuning != profile.enablePerClusterTuning
+            if (perClusterChanged) {
+                Timber.tag("PowerManager").i(
+                    "Per-cluster tuning changed to ${profile.enablePerClusterTuning}, restarting the tuner"
+                )
+            }
+            if (profile.autoTuningMode != AutoTuningMode.AUTO || perClusterChanged) {
                 stopAutoTuning()
+            }
+            // Stop the tuner before handing clocks to the OS, and take them back before it starts again.
+            if (isGameStarted && previousProfile.autoTuningMode != profile.autoTuningMode) {
+                switchAutoTuningMode(previousProfile.autoTuningMode, profile.autoTuningMode)
+            }
+            if (profile.autoTuningMode == AutoTuningMode.AUTO) {
+                startAutoTuning()
             }
         } else {
             stopAutoTuning()
@@ -569,18 +641,39 @@ object PowerManager {
                 }
             }
 
-            if (previousProfile.enableGamePinning != profile.enableGamePinning) {
-                val processName = pinnedGameProcessName
-                if (profile.enableGamePinning) {
-                    if (processName != null) {
-                        Timber.tag("PowerManager").i("Game pinning switched on, pinning $processName now")
-                        startGamePin(processName, "live toggle")
-                    } else {
-                        Timber.tag("PowerManager").i("Game pinning switched on, no game process recorded yet")
-                    }
-                } else {
-                    unpinGame()
+            // Pins were released when power control got switched off.
+            if (profile.enablePowerControl) {
+                applyPinningChanges(previousProfile, profile)
+            }
+        }
+    }
+
+    /** Re-pins or releases the game and the background group live, when [profile] changes how they're pinned. */
+    private fun applyPinningChanges(previousProfile: PowerProfile, profile: PowerProfile) {
+        val mode = profile.gamePinningMode
+        val modeChanged = previousProfile.gamePinningMode != mode
+        val isManual = mode == GamePinningMode.MANUAL
+
+        if (modeChanged || (isManual && previousProfile.manualGamePinCores != profile.manualGamePinCores)) {
+            val processName = pinnedGameProcessName
+            when {
+                mode == GamePinningMode.OFF -> unpinGame()
+                processName != null -> {
+                    Timber.tag("PowerManager").i("Game pinning mode is now $mode, pinning $processName now")
+                    startGamePin(processName, "live toggle")
                 }
+                else -> Timber.tag("PowerManager").i("Game pinning mode is now $mode, no game process recorded yet")
+            }
+        }
+
+        // Background processes are otherwise pinned once at launch, so live changes need a re-pin too.
+        if (modeChanged || (isManual && previousProfile.manualBackgroundPinCores != profile.manualBackgroundPinCores)) {
+            if (mode == GamePinningMode.OFF) {
+                unpinBackgroundProcesses()
+            } else {
+                Timber.tag("PowerManager").i("Background pinning mode is now $mode, re-pinning Wine infrastructure now")
+                pinBackgroundProcesses(initialDelayMs = 0L)
+                pinPulseAudioToDedicatedCores(initialDelayMs = 0L)
             }
         }
     }
@@ -674,13 +767,15 @@ object PowerManager {
                 minBusLevel = ramDisplayInfo?.minBusLevel ?: 0,
                 maxBusLevel = ramDisplayInfo?.maxBusLevel ?: 0
             )).copy(
-                // Preserve enableAutoTuning and tuningStrategy from PowerManager's current profile
+                // Preserve autoTuningMode and tuningStrategy from PowerManager's current profile
                 enablePowerControl = currentProfile.enablePowerControl,
-                enableAutoTuning = currentProfile.enableAutoTuning,
+                autoTuningMode = currentProfile.autoTuningMode,
                 enablePerClusterTuning = currentProfile.enablePerClusterTuning,
                 adaptiveFpsCapEnabled = currentProfile.adaptiveFpsCapEnabled,
                 enableFanControl = currentProfile.enableFanControl,
-                enableGamePinning = currentProfile.enableGamePinning,
+                gamePinningMode = currentProfile.gamePinningMode,
+                manualGamePinCores = currentProfile.manualGamePinCores,
+                manualBackgroundPinCores = currentProfile.manualBackgroundPinCores,
                 tuningStrategy = currentProfile.tuningStrategy
             )
 
@@ -698,11 +793,16 @@ object PowerManager {
                 ),
                 gpuInfo = gpuDisplayInfo,
                 ramInfo = ramDisplayInfo,
+                cpuTopology = (driver as? PServerDriver)?.let { buildCpuTopologyDisplayInfo(it) },
             )
         } catch (e: Exception) {
             Timber.tag("PowerManager").e(e, "Failed to refresh power control UI state")
         }
     }
+
+    /** The discovered cluster layout for the Manual pinning checkboxes, or null when discovery found none. */
+    private fun buildCpuTopologyDisplayInfo(pserver: PServerDriver): CpuTopologyDisplayInfo? =
+        pserver.getCpuClusters().takeIf { it.isNotEmpty() }?.let { CpuTopologyDisplayInfo(it) }
 
     /**
      * Caps currently applied by the cluster tuner, or null when it is not running.
@@ -1048,11 +1148,7 @@ object PowerManager {
      * Order is efficiency, performance, then prime. For dual-cluster devices,
      * PERFORMANCE is the lower-frequency cluster and PRIME is the higher one.
      */
-    private fun allCpuCoresSorted(pserver: PServerDriver): List<Int> {
-        return pserver.getCpuCoresByCluster(PServerDriver.CpuCluster.EFFICIENCY) +
-            pserver.getCpuCoresByCluster(PServerDriver.CpuCluster.PERFORMANCE) +
-            pserver.getCpuCoresByCluster(PServerDriver.CpuCluster.PRIME)
-    }
+    private fun allCpuCoresSorted(pserver: PServerDriver): List<Int> = pserver.getAllCpuCores()
 
     /**
      * The N lowest-frequency cores, reserved for non-game processes
@@ -1070,32 +1166,76 @@ object PowerManager {
         return if (all.size <= 2) all else all.drop(2)
     }
 
+    /** Auto mode's current background/game core split, formatted for the Manual core-list profile fields. */
+    private fun autoModeCoreSplit(): Pair<String, String>? {
+        val pserver = driver as? PServerDriver ?: return null
+        val background = lowestCores(pserver, 2)
+        val game = gameCores(pserver)
+        if (background.isEmpty() && game.isEmpty()) return null
+        return toCpuListString(background) to toCpuListString(game)
+    }
+
+    /** Fills a blank Manual core list from Auto's current split, so switching to Manual starts from what Auto did. */
+    private fun withSeededManualCores(profile: PowerProfile): PowerProfile {
+        if (profile.gamePinningMode != GamePinningMode.MANUAL) return profile
+        val needsGame = profile.manualGamePinCores.isBlank()
+        val needsBackground = profile.manualBackgroundPinCores.isBlank()
+        if (!needsGame && !needsBackground) return profile
+
+        val (background, game) = autoModeCoreSplit() ?: return profile
+        Timber.tag("PowerManager").i(
+            "Seeded empty Manual core list(s) from Auto's split (background=$background, game=$game)"
+        )
+        return profile.copy(
+            manualBackgroundPinCores = if (needsBackground) background else profile.manualBackgroundPinCores,
+            manualGamePinCores = if (needsGame) game else profile.manualGamePinCores,
+        )
+    }
+
     /**
-     * Pin PulseAudio daemon to the 2 lowest-frequency cores.
-     * The game is pinned to all remaining cores, so PulseAudio never shares
-     * a CPU with the game.
+     * Cores the game pins to, per [PowerProfile.gamePinningMode]; empty = don't pin. In Auto that is
+     * every core but the 2 lowest-frequency ones, which [backgroundPinCores] keeps for Wine and audio.
      */
-    private fun pinPulseAudioToDedicatedCores() {
+    private fun gamePinCores(pserver: PServerDriver): List<Int> {
+        return when (currentProfile.gamePinningMode) {
+            GamePinningMode.AUTO -> gameCores(pserver)
+            GamePinningMode.OFF -> emptyList()
+            GamePinningMode.MANUAL -> parseCpuList(currentProfile.manualGamePinCores).sorted()
+        }
+    }
+
+    /** Cores the Wine background group and PulseAudio pin to, per [PowerProfile.gamePinningMode]; empty = don't pin. */
+    private fun backgroundPinCores(pserver: PServerDriver): List<Int> {
+        return when (currentProfile.gamePinningMode) {
+            GamePinningMode.AUTO -> lowestCores(pserver, 2)
+            GamePinningMode.OFF -> emptyList()
+            GamePinningMode.MANUAL -> parseCpuList(currentProfile.manualBackgroundPinCores).sorted()
+        }
+    }
+
+    /**
+     * Pins PulseAudio onto [backgroundPinCores], next to the Wine background group.
+     * [initialDelayMs] gives the daemon time to start at launch; live changes pass 0.
+     */
+    private fun pinPulseAudioToDedicatedCores(initialDelayMs: Long = AUDIO_PIN_LAUNCH_DELAY_MS) {
         val driver = driver
         if (driver !is PServerDriver) return
 
+        val generation = ++audioPinGeneration
         Thread {
             try {
-                // Give PulseAudio time to start if it wasn't already running
-                Thread.sleep(500)
+                if (initialDelayMs > 0) Thread.sleep(initialDelayMs)
 
-                val audioPid = driver.getProcessId("libpulseaudio.so")
-                if (audioPid != null) {
-                    val audioCores = lowestCores(driver, 2)
-
-                    if (audioCores.isNotEmpty()) {
-                        val success = driver.setCpuAffinityByCores(audioPid, audioCores)
-                        if (success) {
-                            Timber.tag("PowerManager").i("Pinned PulseAudio (PID: $audioPid) to CPU $audioCores")
-                        }
+                synchronized(affinityLock) {
+                    if (generation != audioPinGeneration) return@Thread
+                    val audioCores = backgroundPinCores(driver)
+                    if (audioCores.isEmpty()) {
+                        Timber.tag("PowerManager").d(
+                            "Background pinning mode is ${currentProfile.gamePinningMode}, skipping PulseAudio"
+                        )
+                        return@Thread
                     }
-                } else {
-                    Timber.tag("PowerManager").d("PulseAudio not found, skipping audio pinning")
+                    applyAudioAffinity(driver, audioCores, "Pinned")
                 }
             } catch (e: Exception) {
                 Timber.tag("PowerManager").e(e, "Failed to pin PulseAudio")
@@ -1104,66 +1244,31 @@ object PowerManager {
     }
 
     /**
-     * Pin Wine/background processes to the 2 lowest-frequency cores.
-     * The game is pinned to all remaining cores, so these processes never
-     * share a CPU with the game.
+     * Pins the Wine background group onto [backgroundPinCores]: in Auto the 2 lowest-frequency cores,
+     * in Manual the user's own set, in Off nothing. [initialDelayMs] lets Wine spawn them at launch;
+     * live changes pass 0.
      */
-    fun pinBackgroundProcesses() {
+    fun pinBackgroundProcesses(initialDelayMs: Long = BACKGROUND_PIN_LAUNCH_DELAY_MS) {
         if (!isProfilePowerControlEnabled()) return
         val driver = driver
         if (driver !is PServerDriver) return
 
+        val generation = ++backgroundPinGeneration
         Thread {
             try {
-                // Wait for Wine to fully initialize
-                Thread.sleep(2000)
+                if (initialDelayMs > 0) Thread.sleep(initialDelayMs)
 
-                val backgroundCores = lowestCores(driver, 2)
-
-                if (backgroundCores.isEmpty()) {
-                    Timber.tag("PowerManager").w("No cores available for background pinning")
-                    return@Thread
+                synchronized(affinityLock) {
+                    if (generation != backgroundPinGeneration) return@Thread
+                    val backgroundCores = backgroundPinCores(driver)
+                    if (backgroundCores.isEmpty()) {
+                        Timber.tag("PowerManager").i(
+                            "Background pinning mode is ${currentProfile.gamePinningMode}, no cores to pin Wine infrastructure to"
+                        )
+                        return@Thread
+                    }
+                    applyBackgroundAffinity(driver, backgroundCores, "Pinned")
                 }
-
-                // Pin wineserver to the background cores (critical for Wine IPC)
-                driver.findRunningProcesses("wineserver")
-                    .firstOrNull { it.second.endsWith("wineserver") }?.let {
-                        val pid = it.first
-                        val success = driver.setCpuAffinityByCores(pid, backgroundCores)
-                        if (success) {
-                            Timber.tag("PowerManager").i("Pinned wineserver (PID: $pid) to CPUs ${backgroundCores.joinToString()}")
-                        }
-                    }
-
-                // Pin winhandler to the background cores
-                driver.findRunningProcesses("winhandler.exe")
-                    .firstOrNull { it.second.endsWith("winhandler.exe") }?.let {
-                        val pid = it.first
-                        val success = driver.setCpuAffinityByCores(pid, backgroundCores)
-                        if (success) {
-                            Timber.tag("PowerManager").i("Pinned winhandler.exe (PID: $pid) to CPUs ${backgroundCores.joinToString()}")
-                        }
-                    }
-
-                // Pin services.exe to the background cores
-                driver.findRunningProcesses("services.exe")
-                    .firstOrNull { it.second.endsWith("services.exe") }?.let {
-                        val pid = it.first
-                        val success = driver.setCpuAffinityByCores(pid, backgroundCores)
-                        if (success) {
-                            Timber.tag("PowerManager").i("Pinned services.exe (PID: $pid) to CPUs ${backgroundCores.joinToString()}")
-                        }
-                    }
-
-                // Pin libsteambootstrap.so to the background cores
-                driver.findRunningProcesses("libsteambootstrap.so")
-                    .firstOrNull { it.second.contains("libsteambootstrap.so") }?.let {
-                        val pid = it.first
-                        val success = driver.setCpuAffinityByCores(pid, backgroundCores)
-                        if (success) {
-                            Timber.tag("PowerManager").i("Pinned libsteambootstrap.so (PID: $pid) to CPUs ${backgroundCores.joinToString()}")
-                        }
-                    }
             } catch (e: Exception) {
                 Timber.tag("PowerManager").e(e, "Failed to pin Wine infrastructure")
             }
@@ -1171,9 +1276,66 @@ object PowerManager {
     }
 
     /**
+     * Hands the Wine background group and PulseAudio every core back; mirrors [unpinGame] for them.
+     * [blocking] runs it on the calling thread, for callers that stop the driver right after.
+     */
+    private fun unpinBackgroundProcesses(blocking: Boolean = false) {
+        val driver = driver
+        if (driver !is PServerDriver) return
+
+        // All cores, not the container CPU list: that list only ever reaches the game's windows, so this is their pre-pin state.
+        val allCores = allKnownCores(driver)
+        if (allCores.isEmpty()) {
+            Timber.tag("PowerManager").w("No all-cores mask available, background process affinity left alone")
+            return
+        }
+
+        val generation = ++backgroundPinGeneration
+        val audioGeneration = ++audioPinGeneration
+        runAffinityJob(blocking) {
+            try {
+                synchronized(affinityLock) {
+                    if (generation == backgroundPinGeneration) applyBackgroundAffinity(driver, allCores, "Unpinned")
+                    if (audioGeneration == audioPinGeneration) applyAudioAffinity(driver, allCores, "Unpinned")
+                }
+            } catch (e: Exception) {
+                Timber.tag("PowerManager").e(e, "Failed to unpin Wine infrastructure")
+            }
+        }
+    }
+
+    /** Applies [cores] to each running [BACKGROUND_PROCESSES] entry; [action] only words the log line. */
+    private fun applyBackgroundAffinity(pserver: PServerDriver, cores: List<Int>, action: String) {
+        for (process in BACKGROUND_PROCESSES) {
+            val pid = pserver.findRunningProcesses(process.name)
+                .firstOrNull { process.matches(it.second) }?.first ?: continue
+            if (pserver.setCpuAffinityByCores(pid, cores)) {
+                Timber.tag("PowerManager").i("$action ${process.name} (PID: $pid), CPUs ${cores.joinToString()}")
+            }
+        }
+    }
+
+    /** Applies [cores] to the PulseAudio daemon when it runs; [action] only words the log line. */
+    private fun applyAudioAffinity(pserver: PServerDriver, cores: List<Int>, action: String) {
+        val audioPid = pserver.getProcessId("libpulseaudio.so")
+        if (audioPid == null) {
+            Timber.tag("PowerManager").d("PulseAudio not found, skipping audio pinning")
+            return
+        }
+        if (pserver.setCpuAffinityByCores(audioPid, cores)) {
+            Timber.tag("PowerManager").i("$action PulseAudio (PID: $audioPid), CPUs ${cores.joinToString()}")
+        }
+    }
+
+    /** Runs [job] right here when [blocking], otherwise on a fresh background thread. */
+    private fun runAffinityJob(blocking: Boolean, job: () -> Unit) {
+        if (blocking) job() else Thread { job() }.start()
+    }
+
+    /**
      * Records the game process of this session and pins it onto the fast cores when the profile
      * asks for it. The name is recorded whatever the gates say, so a later toggle of
-     * [PowerProfile.enableGamePinning] knows which process to move.
+     * [PowerProfile.gamePinningMode] knows which process to move.
      *
      * @param processName Process name or package name
      * @param maxRetries Maximum number of retry attempts
@@ -1184,8 +1346,8 @@ object PowerManager {
         maxRetries: Int = GAME_PIN_MAX_RETRIES,
         retryDelayMs: Long = GAME_PIN_RETRY_DELAY_MS
     ) {
-        if (!isProfilePowerControlEnabled()) return
         pinnedGameProcessName = processName
+        if (!isProfilePowerControlEnabled()) return
         startGamePin(processName, "game start", maxRetries, retryDelayMs)
     }
 
@@ -1209,16 +1371,29 @@ object PowerManager {
             return
         }
 
-        if (!currentProfile.enableGamePinning) {
-            Timber.tag("PowerManager").i("Game pinning switched off in the profile, not pinning $processName")
-            return
-        }
-
-        if (!ownsGameAffinity) {
-            Timber.tag("PowerManager").i(
-                "Container CPU list owns the game affinity, not pinning $processName"
-            )
-            return
+        when (currentProfile.gamePinningMode) {
+            GamePinningMode.OFF -> {
+                Timber.tag("PowerManager").i("Game pinning mode is Off, not pinning $processName")
+                return
+            }
+            GamePinningMode.AUTO -> {
+                if (!ownsGameAffinity) {
+                    if (pinnedGameCores.isNotEmpty()) {
+                        Timber.tag("PowerManager").i(
+                            "Container CPU list owns the game affinity, releasing $processName's Manual pin before switching to Auto"
+                        )
+                        unpinGame()
+                    } else {
+                        Timber.tag("PowerManager").i(
+                            "Container CPU list owns the game affinity, not pinning $processName"
+                        )
+                    }
+                    return
+                }
+            }
+            GamePinningMode.MANUAL -> {
+                // Manual explicitly overrides the container CPU list; ownsGameAffinity only governs Auto.
+            }
         }
 
         val generation = ++gamePinGeneration
@@ -1233,12 +1408,10 @@ object PowerManager {
                 var pid: Int? = null
                 var attempt = 1
                 while (attempt <= maxRetries) {
-                    if (generation != gamePinGeneration) {
+                    val applied = applyAffinityIfCurrent(generation, processName, pid, gameCores) ?: run {
                         Timber.tag("PowerManager").i("Pin run of $processName called off ($reason)")
                         return@Thread
                     }
-
-                    val applied = applyAffinity(processName, pid, gameCores)
                     pid = findGamePid(pserver, processName)
 
                     if (pid == null) {
@@ -1246,8 +1419,15 @@ object PowerManager {
                             "$processName has not started yet, pin attempt $attempt of $maxRetries ($reason)"
                         )
                     } else {
-                        if (!applied) applyAffinity(processName, pid, gameCores)
+                        if (!applied && applyAffinityIfCurrent(generation, processName, pid, gameCores) == null) {
+                            return@Thread
+                        }
                         val verified = verifyGameAffinity(pid, gameCores, "PowerManager")
+                        // A newer pin run or an unpin may have taken over while this one was verifying.
+                        if (generation != gamePinGeneration) {
+                            Timber.tag("PowerManager").i("Pin run of $processName called off ($reason)")
+                            return@Thread
+                        }
                         pinnedGameProcessName = processName
                         pinnedGamePid = pid
                         pinnedGameCores = gameCores
@@ -1269,46 +1449,61 @@ object PowerManager {
         }.start()
     }
 
+    private fun allKnownCores(pserver: PServerDriver? = driver as? PServerDriver): List<Int> {
+        pserver?.getAllCpuCores()?.takeIf { it.isNotEmpty() }?.let { return it }
+        return parseCpuList(Container.getFallbackCPUList()).sorted()
+    }
+
+    /** Cores to release the game onto: the container's CPU list if it owns affinity, else all known cores. */
+    private fun targetCoresToUnpin(): List<Int> {
+        if (!ownsGameAffinity) {
+            containerCpuList(containerDir)
+                ?.let { parseCpuList(it).sorted() }
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { return it }
+        }
+        return allKnownCores()
+    }
+
     /**
-     * Hands the recorded game process back every core and forgets the pinned mask.
+     * Hands the recorded game process back its unpinned cores (see [targetCoresToUnpin]) and forgets
+     * the pinned mask. [blocking] runs it on the calling thread, for callers that stop the driver right after.
      */
-    private fun unpinGame() {
+    private fun unpinGame(blocking: Boolean = false) {
         val processName = pinnedGameProcessName
         if (processName == null) {
             Timber.tag("PowerManager").i("No game process recorded, nothing to unpin")
             return
         }
 
-        val allCores = parseCpuList(Container.getFallbackCPUList()).sorted()
-        if (allCores.isEmpty()) {
+        val coresToUnpin = targetCoresToUnpin()
+        if (coresToUnpin.isEmpty()) {
             Timber.tag("PowerManager").w("No all-cores mask available, affinity of $processName left alone")
             return
         }
 
         val pid = pinnedGamePid
-        gamePinGeneration++
-        Thread {
+        val generation = ++gamePinGeneration
+        runAffinityJob(blocking) {
             try {
-                val success = applyAffinity(processName, pid, allCores)
+                val success = applyAffinityIfCurrent(generation, processName, pid, coresToUnpin) ?: return@runAffinityJob
                 pinnedGameCores = emptyList()
                 Timber.tag("PowerManager").i(
-                    "Game pinning switched off, gave $processName CPUs ${allCores.joinToString()} back (success=$success)"
+                    "Game pinning switched off, gave $processName CPUs ${coresToUnpin.joinToString()} back (success=$success)"
                 )
-                if (success && pid != null) verifyGameAffinity(pid, allCores, "PowerManager")
+                // A blocking caller is about to stop the driver, so /proc can't be read back as root anymore.
+                if (success && pid != null && !blocking) verifyGameAffinity(pid, coresToUnpin, "PowerManager")
             } catch (e: Exception) {
                 Timber.tag("PowerManager").e(e, "Failed to unpin game: $processName")
             }
-        }.start()
+        }
     }
 
-    /**
-     * Cores a pinned game runs on: all cores except the 2 lowest-frequency ones,
-     * which are reserved for PulseAudio and other background/Wine processes.
-     * This applies uniformly to single, dual, and tri-cluster devices.
-     */
-    private fun gamePinCores(pserver: PServerDriver): List<Int> {
-        return gameCores(pserver)
-    }
+    /** [applyAffinity] under [affinityLock]; null, without applying anything, once [generation] got superseded. */
+    private fun applyAffinityIfCurrent(generation: Int, processName: String, pid: Int?, cores: List<Int>): Boolean? =
+        synchronized(affinityLock) {
+            if (generation == gamePinGeneration) applyAffinity(processName, pid, cores) else null
+        }
 
     /**
      * Linux PID of the game process, or null while it is not running. Only read to verify a pin
@@ -1425,6 +1620,19 @@ object PowerManager {
 
     internal fun formatCores(cores: Collection<Int>): String = cores.sorted().joinToString(", ")
 
+    /** Formats cores the way the Manual core-list profile fields store them, e.g. `4,5,6`. */
+    internal fun toCpuListString(cores: Collection<Int>): String = cores.sorted().joinToString(",")
+
+    /**
+     * [cores] with [core] added or removed. Removing the last remaining core is refused, so a Manual
+     * core list never ends up empty.
+     */
+    internal fun toggleCoreInList(cores: String, core: Int, include: Boolean): String {
+        val current = parseCpuList(cores)
+        val updated = if (include) current + core else current - core
+        return if (updated.isEmpty()) cores else toCpuListString(updated)
+    }
+
     /**
      * Decides once per session whether power control may move the game between cores. A container
      * with an explicit CPU list keeps its own pin, anything else (no list, or the all-cores
@@ -1490,27 +1698,22 @@ object PowerManager {
     private fun applyCurrentProfile() {
         if (currentProfile.enablePowerControl) {
             try {
-                val success = update {
-                    governor(currentProfile.governor.governorName)
-                    minCpuValue(currentProfile.minCpuFreq)
-                    maxCpuValue(currentProfile.maxCpuFreq)
-                    if (isGpuSupported()) {
-                        minGpuPowerLevel(currentProfile.minGpuPowerLevel)
-                        maxGpuPowerLevel(currentProfile.maxGpuPowerLevel)
-                    }
-                    if (isBusSupported()) {
-                        minBusLevel(currentProfile.minBusLevel)
-                        maxBusLevel(currentProfile.maxBusLevel)
-                    }
-                }
+                if (currentProfile.autoTuningMode != AutoTuningMode.OFF) {
+                    val success = applyCpuGpuControl()
 
-                if (success) {
-                    Timber.tag("PowerManager").i("Successfully restored power profile")
+                    if (success) {
+                        Timber.tag("PowerManager").i("Successfully restored power profile")
+                    } else {
+                        Timber.tag("PowerManager").w("Failed to restore power profile")
+                    }
                 } else {
-                    Timber.tag("PowerManager").w("Failed to restore power profile")
+                    val released = driver.releaseFrequencyControl()
+                    Timber.tag("PowerManager").i(
+                        "Auto-tuning mode is Off, released CPU/GPU frequency control back to the OS (success=$released)"
+                    )
                 }
 
-                if (currentProfile.enableAutoTuning) {
+                if (currentProfile.autoTuningMode == AutoTuningMode.AUTO) {
                     startAutoTuning()
                 }
 
@@ -1520,6 +1723,38 @@ object PowerManager {
             } catch (e: Exception) {
                 Timber.tag("PowerManager").e(e, "Failed to apply current profile")
             }
+        }
+    }
+
+    /** Applies the profile's CPU governor/min/max and GPU/Bus min/max power level to the driver. */
+    private fun applyCpuGpuControl(): Boolean {
+        return update {
+            governor(currentProfile.governor.governorName)
+            minCpuValue(currentProfile.minCpuFreq)
+            maxCpuValue(currentProfile.maxCpuFreq)
+            if (isGpuSupported()) {
+                minGpuPowerLevel(currentProfile.minGpuPowerLevel)
+                maxGpuPowerLevel(currentProfile.maxGpuPowerLevel)
+            }
+            if (isBusSupported()) {
+                minBusLevel(currentProfile.minBusLevel)
+                maxBusLevel(currentProfile.maxBusLevel)
+            }
+        }
+    }
+
+    /** Releases/reclaims CPU-GPU frequency control from the OS on entering/leaving [AutoTuningMode.OFF] live. */
+    private fun switchAutoTuningMode(previous: AutoTuningMode, next: AutoTuningMode) {
+        if (next == AutoTuningMode.OFF) {
+            val released = driver.releaseFrequencyControl()
+            Timber.tag("PowerManager").i(
+                "Auto-tuning mode is now Off, released CPU/GPU frequency control back to the OS (success=$released)"
+            )
+        } else if (previous == AutoTuningMode.OFF) {
+            val reclaimed = applyCpuGpuControl()
+            Timber.tag("PowerManager").i(
+                "Auto-tuning mode is now $next, reclaimed CPU/GPU frequency control (success=$reclaimed)"
+            )
         }
     }
 }
