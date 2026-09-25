@@ -324,6 +324,8 @@
     <string name="performance_hud_fps_limiter_off">Без обмежень</string>
     <string name="performance_hud_fps_limiter_value">%1$d FPS</string>
     <string name="performance_hud_fps_limiter_lsfg_base">Обмежує базову частоту кадрів. Частота на екрані — це ліміт, помножений на множник LSFG.</string>
+    <string name="performance_hud_stick_rate_limit">Обмежити частоту стіків</string>
+    <string name="performance_hud_stick_updates_per_second">Оновлень за секунду</string>
     <string name="performance_hud_presets">Набори</string>
     <string name="performance_hud_presets_description">Швидко перемикайтеся між типовими макетами HUD.</string>
     <string name="performance_hud_preset_fps_only">1</string>
@@ -2413,8 +2415,6 @@
     <string name="steam_invite_online">У мережі</string>
     <string name="steam_invite_offline">Не в мережі</string>
     <string name="radial_menu">Радіальне меню</string>
-    <string name="input_throttle_toggle">Тротлінг інпуту</string>
-    <string name="input_poll_rate">Частота опитування</string>
     <string name="radial_menu_settings_title">Радіальне меню</string>
     <string name="radial_menu_cancel">Скасувати</string>
     <string name="radial_menu_slot_count">Слоти</string>

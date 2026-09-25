@@ -336,6 +336,8 @@
     <string name="performance_hud_fps_limiter_off">무제한</string>
     <string name="performance_hud_fps_limiter_value">%1$d FPS</string>
     <string name="performance_hud_fps_limiter_lsfg_base">기본 프레임 레이트를 제한합니다. 화면 표시 레이트는 제한 × LSFG 배수입니다.</string>
+    <string name="performance_hud_stick_rate_limit">스틱 업데이트 빈도 제한</string>
+    <string name="performance_hud_stick_updates_per_second">초당 업데이트 횟수</string>
     <string name="performance_hud_presets">프리셋</string>
     <string name="performance_hud_presets_description">일반적인 HUD 레이아웃으로 빠르게 전환합니다.</string>
     <string name="performance_hud_preset_fps_only">1</string>
@@ -2405,8 +2407,6 @@
     <string name="steam_invite_online">온라인</string>
     <string name="steam_invite_offline">오프라인</string>
     <string name="radial_menu">방사형 메뉴</string>
-    <string name="input_throttle_toggle">입력 스ロット링</string>
-    <string name="input_poll_rate">폴링 속도</string>
     <string name="radial_menu_settings_title">방사형 메뉴</string>
     <string name="radial_menu_cancel">취소</string>
     <string name="radial_menu_slot_count">슬롯</string>

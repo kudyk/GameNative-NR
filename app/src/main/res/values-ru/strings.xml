@@ -1001,6 +1001,8 @@ https://gamenative.app
     <string name="performance_hud_fps_limiter_off">Без ограничений</string>
     <string name="performance_hud_fps_limiter_value">%1$d FPS</string>
     <string name="performance_hud_fps_limiter_lsfg_base">Ограничивает базовую частоту кадров. Частота на экране — это лимит, умноженный на множитель LSFG.</string>
+    <string name="performance_hud_stick_rate_limit">Ограничить частоту стиков</string>
+    <string name="performance_hud_stick_updates_per_second">Обновлений в секунду</string>
     <string name="performance_hud_presets">Предустановки</string>
     <string name="performance_hud_presets_description">Быстро переключаться между типовыми макетами HUD.</string>
     <string name="performance_hud_preset_fps_only">1</string>
@@ -2343,8 +2345,6 @@ https://gamenative.app
     <string name="steam_invite_online">В сети</string>
     <string name="steam_invite_offline">Не в сети</string>
     <string name="radial_menu">Радиальное меню</string>
-    <string name="input_throttle_toggle">Троттлинг инпута</string>
-    <string name="input_poll_rate">Частота опроса</string>
     <string name="radial_menu_settings_title">Радиальное меню</string>
     <string name="radial_menu_cancel">Отмена</string>
     <string name="radial_menu_slot_count">Слоты</string>

@@ -322,6 +322,8 @@
     <string name="performance_hud_fps_limiter_off">無限制</string>
     <string name="performance_hud_fps_limiter_value">%1$d FPS</string>
     <string name="performance_hud_fps_limiter_lsfg_base">限制基礎幀率。螢幕幀率為上限乘以 LSFG 倍數。</string>
+    <string name="performance_hud_stick_rate_limit">限制搖桿更新頻率</string>
+    <string name="performance_hud_stick_updates_per_second">每秒更新次數</string>
     <string name="performance_hud_presets">預設</string>
     <string name="performance_hud_presets_description">快速切換常用 HUD 版面配置。</string>
     <string name="performance_hud_preset_fps_only">1</string>
@@ -2416,8 +2418,6 @@
     <string name="steam_invite_online">線上</string>
     <string name="steam_invite_offline">離線</string>
     <string name="radial_menu">徑向選單</string>
-    <string name="input_throttle_toggle">輸入節流</string>
-    <string name="input_poll_rate">輪詢率</string>
     <string name="radial_menu_settings_title">徑向選單</string>
     <string name="radial_menu_cancel">取消</string>
     <string name="radial_menu_slot_count">槽位</string>
