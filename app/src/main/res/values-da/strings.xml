@@ -258,6 +258,8 @@
     <string name="performance_hud_fps_limiter_off">Ubegrænset</string>
     <string name="performance_hud_fps_limiter_value">%1$d FPS</string>
     <string name="performance_hud_fps_limiter_lsfg_base">Begrænser basisframeraten. Skærmraten er grænsen gange LSFG-multiplikatoren.</string>
+    <string name="performance_hud_stick_rate_limit">Begræns opdateringsrate for sticks</string>
+    <string name="performance_hud_stick_updates_per_second">Opdateringer pr. sekund</string>
     <string name="performance_hud_presets">Forudindstillinger</string>
     <string name="performance_hud_presets_description">Skift hurtigt mellem almindelige HUD-layouts.</string>
     <string name="performance_hud_preset_fps_only">1</string>
@@ -2281,8 +2283,6 @@
     <string name="steam_invite_online">Online</string>
     <string name="steam_invite_offline">Offline</string>
     <string name="radial_menu">Radialmenu</string>
-    <string name="input_throttle_toggle">Input throttling</string>
-    <string name="input_poll_rate">Opdateringshastighed</string>
     <string name="radial_menu_settings_title">Radialmenu</string>
     <string name="radial_menu_cancel">Annuller</string>
     <string name="radial_menu_slot_count">Pladser</string>

@@ -349,7 +349,7 @@ class PerformanceQuickMenuState(
     val fpsLimiterEnabled: Boolean = true,
     val fpsLimiterTarget: Int = 60,
     val fpsLimiterMax: Int = 60,
-    val inputThrottlingEnabled: Boolean = true,
+    val inputThrottlingEnabled: Boolean = false,
     val inputPollRateHz: Int = 60,
     val onHudConfigChanged: (PerformanceHudConfig) -> Unit = {},
     val onFpsLimiterEnabledChanged: (Boolean) -> Unit = {},
@@ -1371,7 +1371,7 @@ private fun PerformanceHudQuickMenuTab(
 
         Spacer(modifier = Modifier.height(8.dp))
         QuickMenuToggleRow(
-            title = stringResource(R.string.input_throttle_toggle),
+            title = stringResource(R.string.performance_hud_stick_rate_limit),
             enabled = inputThrottlingEnabled,
             onToggle = { onInputThrottlingEnabledChanged(!inputThrottlingEnabled) },
             accentColor = accentColor,
@@ -1385,8 +1385,8 @@ private fun PerformanceHudQuickMenuTab(
             Column {
                 Spacer(modifier = Modifier.height(4.dp))
                 QuickMenuAdjustmentRow(
-                    title = stringResource(R.string.input_poll_rate),
-                    valueText = "$inputPollRateHz Hz",
+                    title = stringResource(R.string.performance_hud_stick_updates_per_second),
+                    valueText = inputPollRateHz.toString(),
                     progress = fpsLimiterProgress(inputPollRateHz, 240),
                     onDecrease = {
                         onInputPollRateHzChanged(previousFpsLimiterValue(inputPollRateHz, 240))

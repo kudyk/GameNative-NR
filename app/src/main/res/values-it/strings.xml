@@ -329,6 +329,8 @@
     <string name="performance_hud_fps_limiter_off">Illimitato</string>
     <string name="performance_hud_fps_limiter_value">%1$d FPS</string>
     <string name="performance_hud_fps_limiter_lsfg_base">Limita la frequenza di base. La frequenza su schermo è il limite moltiplicato per il moltiplicatore LSFG.</string>
+    <string name="performance_hud_stick_rate_limit">Limita frequenza degli stick</string>
+    <string name="performance_hud_stick_updates_per_second">Aggiornamenti al secondo</string>
     <string name="performance_hud_presets">Predefiniti</string>
     <string name="performance_hud_presets_description">Passa rapidamente tra layout HUD comuni.</string>
     <string name="performance_hud_preset_fps_only">1</string>
@@ -2402,8 +2404,6 @@
     <string name="steam_invite_online">Online</string>
     <string name="steam_invite_offline">Offline</string>
     <string name="radial_menu">Menu radiale</string>
-    <string name="input_throttle_toggle">Limitazione input</string>
-    <string name="input_poll_rate">Frequenza di polling</string>
     <string name="radial_menu_settings_title">Menu radiale</string>
     <string name="radial_menu_cancel">Annulla</string>
     <string name="radial_menu_slot_count">Slot</string>

@@ -69,6 +69,7 @@ public class WinHandler {
     private volatile int currentControllerId;
     private byte dinputMapperType;
     private final List<Integer> gamepadClients;
+    // Last gamepad packet sent per port; touched only on the send thread.
     private final Map<Integer, byte[]> lastSentUdpDataByPort = new HashMap<>();
     private boolean initReceived;
     private InetAddress localhost;
@@ -135,11 +136,20 @@ public class WinHandler {
                 + " descriptor=\"" + device.getDescriptor() + "\"";
     }
 
+    /** A per-port gamepad state send; addAction() keeps only the newest pending one per port. */
     private static class GamepadStateUpdateTask implements Runnable {
         final int port;
         private final Runnable action;
-        GamepadStateUpdateTask(int port, Runnable action) { this.port = port; this.action = action; }
-        @Override public void run() { action.run(); }
+
+        GamepadStateUpdateTask(int port, Runnable action) {
+            this.port = port;
+            this.action = action;
+        }
+
+        @Override
+        public void run() {
+            action.run();
+        }
     }
 
     public enum PreferredInputApi {
@@ -600,6 +610,8 @@ public class WinHandler {
                 this.onGetProcessInfoListener.onGetProcessInfo(index, numProcesses, new ProcessInfo(pid, name, memoryUsage, affinityMask, wow64Process));
                 return;
             case RequestCodes.GET_GAMEPAD:
+                // A (re)registering client starts from scratch: its next state must go out even if unchanged.
+                addAction(() -> this.lastSentUdpDataByPort.remove(port));
                 boolean isXInput = this.receiveData.get() == 1;
                 boolean notify = this.receiveData.get() == 1;
                 final ControlsProfile profile = inputControlsView.getProfile();
@@ -722,7 +734,8 @@ public class WinHandler {
                 this.currentController = null;
                 this.gamepadClients.clear();
                 this.xinputProcesses.clear();
-                this.lastSentUdpDataByPort.clear();
+                // The map belongs to the send thread (see sendGamepadState()).
+                addAction(this.lastSentUdpDataByPort::clear);
                 return;
             case RequestCodes.CURSOR_POS_FEEDBACK:
                 short x = this.receiveData.getShort();

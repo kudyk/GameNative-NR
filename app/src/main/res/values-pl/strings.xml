@@ -337,6 +337,8 @@
     <string name="performance_hud_fps_limiter_off">Bez limitu</string>
     <string name="performance_hud_fps_limiter_value">%1$d FPS</string>
     <string name="performance_hud_fps_limiter_lsfg_base">Ogranicza bazową liczbę klatek. Liczba klatek na ekranie to limit razy mnożnik LSFG.</string>
+    <string name="performance_hud_stick_rate_limit">Ogranicz częstotliwość gałek</string>
+    <string name="performance_hud_stick_updates_per_second">Aktualizacje na sekundę</string>
     <string name="performance_hud_presets">Presety</string>
     <string name="performance_hud_presets_description">Szybko przełączaj między typowymi układami HUD.</string>
     <string name="performance_hud_preset_fps_only">1</string>
@@ -2417,8 +2419,6 @@
     <string name="steam_invite_online">Online</string>
     <string name="steam_invite_offline">Offline</string>
     <string name="radial_menu">Menu radialne</string>
-    <string name="input_throttle_toggle">Dławienie wejścia</string>
-    <string name="input_poll_rate">Częstotliwość odpytywania</string>
     <string name="radial_menu_settings_title">Menu radialne</string>
     <string name="radial_menu_cancel">Anuluj</string>
     <string name="radial_menu_slot_count">Sloty</string>

@@ -365,7 +365,7 @@ class PhysicalControllerHandlerTest {
     }
 
     @Test
-    fun `unthrottled motion is dispatched synchronously`() {
+    fun `motion is dispatched synchronously with throttling off, the default`() {
         val deviceId = 42
         val axisKeyCode = ExternalControllerBinding.getKeyCodeForAxis(MotionEvent.AXIS_X, 1.toByte())
         val controller = motionController(axisKeyCode, Binding.KEY_E)
@@ -373,7 +373,6 @@ class PhysicalControllerHandlerTest {
         whenever(profile.getController(deviceId)).thenReturn(controller)
         val xServer = mock<XServer>()
         val handler = PhysicalControllerHandler(profile, xServer)
-        handler.setInputThrottlingEnabled(false)
         val event = motionEvent(deviceId)
 
         try {
@@ -399,6 +398,7 @@ class PhysicalControllerHandlerTest {
         whenever(profile.getController(deviceId)).thenReturn(controller)
         val xServer = mock<XServer>()
         val handler = PhysicalControllerHandler(profile, xServer)
+        handler.setInputThrottlingEnabled(true)
         val event = motionEvent(deviceId)
 
         try {
@@ -431,7 +431,6 @@ class PhysicalControllerHandlerTest {
         whenever(profile.cursorSpeed).thenReturn(1f)
         val xServer = mock<XServer>()
         val handler = PhysicalControllerHandler(profile, xServer)
-        handler.setInputThrottlingEnabled(false)
         val event = motionEvent(deviceId)
 
         try {

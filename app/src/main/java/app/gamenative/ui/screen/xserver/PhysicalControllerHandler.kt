@@ -4,6 +4,7 @@ import android.graphics.PointF
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import android.view.Choreographer
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -59,6 +60,10 @@ class PhysicalControllerHandler(
     private data class BindingCacheEntry(val bindings: Map<Int, ExternalControllerBinding>, val sourceCount: Int)
 
     companion object {
+        const val DEFAULT_POLL_RATE_HZ = 60
+        const val MIN_POLL_RATE_HZ = 15
+        const val MAX_POLL_RATE_HZ = 240
+
         private const val SCROLL_REPEAT_INTERVAL_MS = 90L
         private const val UNKNOWN_DEVICE_ID = -1
         private const val SEQUENCE_PRESS_MS = 80L
@@ -70,9 +75,6 @@ class PhysicalControllerHandler(
         // Squared-distance noise gate for the stick movement anchor; see applyStickMovementGate().
         private const val STICK_MOVEMENT_EPSILON_SQR = 0.0025f
 
-        private const val DEFAULT_HZ = 60
-        private const val MIN_HZ = 15
-        private const val MAX_HZ = 240
         private const val NANOS_PER_SECOND = 1_000_000_000L
 
         // Squared-magnitude noise floor for mouse-look; see flushMouseMove().
@@ -81,6 +83,8 @@ class PhysicalControllerHandler(
         private const val MOUSE_LOOK_PX_PER_SECOND = 600f
         // Caps one mouse-look step after a stall (GC pause, app switch) at 100ms worth of movement.
         private const val MOUSE_LOOK_MAX_STEP_SECONDS = 0.1f
+        // First step after idle has no previous frame to measure from: one 60Hz frame.
+        private const val MOUSE_LOOK_FIRST_STEP_SECONDS = 1f / 60f
     }
 
     private val TAG = "gncontrol"
@@ -113,16 +117,17 @@ class PhysicalControllerHandler(
     // Devices with motion since the last releaseAllActiveInput().
     private val trackedDeviceIds = mutableSetOf<Int>()
 
-    // Devices with motion not dispatched yet; see flushInput().
+    // Devices with motion not dispatched yet, and flushInput()'s reusable snapshot of them.
     private val dirtyDeviceIds = mutableSetOf<Int>()
+    private val pendingDeviceIds = ArrayList<Int>()
 
     // Re-evaluate every tracked device on the next frame, throttle aside (radial menu open/close).
     private var fullReevaluationPending = false
 
-    // Throttle: when on, dispatch and mouse-look each run at most configuredHz times a second.
-    private var throttlingEnabled = true
-    private var configuredHz = DEFAULT_HZ
-    private var throttleIntervalNanos = NANOS_PER_SECOND / DEFAULT_HZ
+    // Throttle (off by default): when on, dispatch and mouse-look each run at most configuredHz times a second.
+    private var throttlingEnabled = false
+    private var configuredHz = DEFAULT_POLL_RATE_HZ
+    private var throttleIntervalNanos = NANOS_PER_SECOND / DEFAULT_POLL_RATE_HZ
 
     // SystemClock.elapsedRealtimeNanos() of the last dispatch.
     private var lastInputFlushNanos = 0L
@@ -174,7 +179,7 @@ class PhysicalControllerHandler(
     }
 
     fun setInputPollRateHz(hz: Int) {
-        configuredHz = hz.coerceIn(MIN_HZ, MAX_HZ)
+        configuredHz = hz.coerceIn(MIN_POLL_RATE_HZ, MAX_POLL_RATE_HZ)
         throttleIntervalNanos = NANOS_PER_SECOND / configuredHz
     }
 
@@ -322,8 +327,7 @@ class PhysicalControllerHandler(
 
     /**
      * Handle physical controller button events.
-     * Digital buttons are discrete Android KeyEvents, not a polled stream - there is nothing to
-     * accumulate here, so these are still dispatched immediately, same as before.
+     * Extracted from InputControlsView.onKeyEvent()
      */
     fun onKeyEvent(event: KeyEvent): Boolean {
         if (profile != null && event.repeatCount == 0) {
@@ -468,7 +472,11 @@ class PhysicalControllerHandler(
         if (!fullReevaluationPending && dirtyDeviceIds.isEmpty()) return
         if (PluviaApp.isOverlayPaused) return
         val currentProfile = profile ?: return
-        val deviceIds = (if (fullReevaluationPending) trackedDeviceIds else dirtyDeviceIds).toList()
+        // Copied: processing can release everything (e.g. a menu binding) and clear these sets.
+        val deviceIds = pendingDeviceIds.apply {
+            clear()
+            addAll(if (fullReevaluationPending) trackedDeviceIds else dirtyDeviceIds)
+        }
         dirtyDeviceIds.clear()
         fullReevaluationPending = false
         lastInputFlushNanos = nowNanos
@@ -561,9 +569,8 @@ class PhysicalControllerHandler(
             return
         }
 
-        // First step after idle has no previous frame to measure from: use one 60Hz frame.
         val dtSeconds = if (lastMouseFlushNanos == 0L) {
-            1f / DEFAULT_HZ
+            MOUSE_LOOK_FIRST_STEP_SECONDS
         } else {
             ((frameTimeNanos - lastMouseFlushNanos) / NANOS_PER_SECOND.toFloat()).coerceIn(0f, MOUSE_LOOK_MAX_STEP_SECONDS)
         }
@@ -707,12 +714,11 @@ class PhysicalControllerHandler(
         val rightAnchor = rightStickAnchors.getOrPut(deviceId) { PointF(Float.NaN, Float.NaN) }
         val leftGated = applyStickMovementGate(0, 1, leftAnchor, controller, deviceId)
         val rightGated = applyStickMovementGate(2, 3, rightAnchor, controller, deviceId)
-        // dpad/hat (indices 4,5) is discrete hardware-side and never gated.
-        val axisGated = booleanArrayOf(leftGated, leftGated, rightGated, rightGated, false, false)
 
         for (i in joystickAxes.indices) {
             // Frozen by the movement gate: unchanged since last dispatch, skip the lookup entirely.
-            if (axisGated[i]) continue
+            // dpad/hat (indices 4,5) is discrete hardware-side and never gated.
+            if ((i < 2 && leftGated) || (i in 2..3 && rightGated)) continue
             val axis = joystickAxes[i]
             val value = joystickValues[i]
             val posKeyCode = ExternalControllerBinding.getKeyCodeForAxis(axis, 1.toByte())
@@ -732,7 +738,8 @@ class PhysicalControllerHandler(
 
                 val wasAlreadyActive = !activeAxisBindings.add(activeSource)
 
-                cachedBinding(controller, deviceId, activeKey)?.let {
+                // Same key as the lookup above: sign(value) picks the positive/negative binding.
+                binding?.let {
                     // Digital keys and sequences fire only on the rising edge.
                     if (isAnalog || !wasAlreadyActive) {
                         handleInputEvent(

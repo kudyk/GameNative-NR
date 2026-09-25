@@ -278,20 +278,6 @@ object PrefManager {
             setPref(SHARPNESS_DENOISE, value.coerceIn(0, 100))
         }
 
-    private val INPUT_POLL_RATE_HZ = intPreferencesKey("input_poll_rate_hz")
-    var inputPollRateHz: Int
-        get() = getPref(INPUT_POLL_RATE_HZ, 60)
-        set(value) {
-            setPref(INPUT_POLL_RATE_HZ, value.coerceIn(15, 240))
-        }
-
-    private val INPUT_THROTTLING_ENABLED = booleanPreferencesKey("input_throttling_enabled")
-    var inputThrottlingEnabled: Boolean
-        get() = getPref(INPUT_THROTTLING_ENABLED, true)
-        set(value) {
-            setPref(INPUT_THROTTLING_ENABLED, value)
-        }
-
     private val CONTAINER_VARIANT = stringPreferencesKey("container_variant")
     var containerVariant: String
         get() = getPref(CONTAINER_VARIANT, Container.DEFAULT_VARIANT)

@@ -266,6 +266,8 @@ private const val DEFAULT_FPS_LIMITER_MAX_HZ = 60
 private const val DEFAULT_FPS_LIMITER_TARGET_HZ = 60
 private const val FPS_LIMITER_ENABLED_EXTRA = "fpsLimiterEnabled"
 private const val FPS_LIMITER_TARGET_EXTRA = "fpsLimiterTarget"
+private const val INPUT_THROTTLING_ENABLED_EXTRA = "inputThrottlingEnabled"
+private const val INPUT_POLL_RATE_EXTRA = "inputPollRateHz"
 
 private fun initialFpsLimiterEnabled(container: Container): Boolean =
     parseBooleanExtra(container.getExtra(FPS_LIMITER_ENABLED_EXTRA)) ?: true
@@ -273,6 +275,14 @@ private fun initialFpsLimiterEnabled(container: Container): Boolean =
 private fun initialFpsLimiterTarget(container: Container): Int =
     parsePositiveFpsLimit(container.getExtra(FPS_LIMITER_TARGET_EXTRA))
         ?: DEFAULT_FPS_LIMITER_TARGET_HZ
+
+private fun initialInputThrottlingEnabled(container: Container): Boolean =
+    parseBooleanExtra(container.getExtra(INPUT_THROTTLING_ENABLED_EXTRA)) ?: false
+
+private fun initialInputPollRateHz(container: Container): Int =
+    parsePositiveFpsLimit(container.getExtra(INPUT_POLL_RATE_EXTRA))
+        ?.coerceIn(PhysicalControllerHandler.MIN_POLL_RATE_HZ, PhysicalControllerHandler.MAX_POLL_RATE_HZ)
+        ?: PhysicalControllerHandler.DEFAULT_POLL_RATE_HZ
 
 private fun detectMaxRefreshRateHz(context: Context, attachedView: View?): Int {
     val display = attachedView?.display
@@ -636,8 +646,8 @@ fun XServerScreen(
     var detectedMaxRefreshRateHz by remember { mutableIntStateOf(detectMaxRefreshRateHz(context, null)) }
     var fpsLimiterEnabled by rememberSaveable(container.id) { mutableStateOf(initialFpsLimiterEnabled(container)) }
     var fpsLimiterTarget by rememberSaveable(container.id) { mutableIntStateOf(initialFpsLimiterTarget(container)) }
-    var inputThrottlingEnabled by rememberSaveable(container.id) { mutableStateOf(PrefManager.inputThrottlingEnabled) }
-    var inputPollRateHz by rememberSaveable(container.id) { mutableIntStateOf(PrefManager.inputPollRateHz) }
+    var inputThrottlingEnabled by rememberSaveable(container.id) { mutableStateOf(initialInputThrottlingEnabled(container)) }
+    var inputPollRateHz by rememberSaveable(container.id) { mutableIntStateOf(initialInputPollRateHz(container)) }
 
     val gyroOverlaySuppressed = showQuickMenu || keepPausedForEditor || showElementEditor ||
         showPhysicalControllerDialog || showTouchGestureDialog || showShooterModeDialog ||
@@ -786,17 +796,23 @@ fun XServerScreen(
         }
     }
 
+    fun persistInputThrottleState() {
+        container.putExtra(INPUT_THROTTLING_ENABLED_EXTRA, inputThrottlingEnabled)
+        container.putExtra(INPUT_POLL_RATE_EXTRA, inputPollRateHz)
+        container.saveData()
+    }
+
     fun applyInputPollRateHz(hz: Int) {
-        val sanitized = hz.coerceIn(15, 240)
+        val sanitized = hz.coerceIn(PhysicalControllerHandler.MIN_POLL_RATE_HZ, PhysicalControllerHandler.MAX_POLL_RATE_HZ)
         inputPollRateHz = sanitized
-        PrefManager.inputPollRateHz = sanitized
         physicalControllerHandler?.setInputPollRateHz(sanitized)
+        persistInputThrottleState()
     }
 
     fun applyInputThrottlingEnabled(enabled: Boolean) {
         inputThrottlingEnabled = enabled
-        PrefManager.inputThrottlingEnabled = enabled
         physicalControllerHandler?.setInputThrottlingEnabled(enabled)
+        persistInputThrottleState()
     }
 
     fun applyLsfgMultiplier(mult: Int) {
