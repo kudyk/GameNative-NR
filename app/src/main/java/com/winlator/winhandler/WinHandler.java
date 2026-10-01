@@ -594,7 +594,7 @@ public class WinHandler {
                     action.run();
                 } catch (RuntimeException e) {
                     // One failed packet must not end this thread, and with it all input to the game.
-                    Log.e(TAG, "WinHandler action failed", e);
+                    Timber.tag(TAG).e(e, "WinHandler action failed");
                 }
             }
         });
