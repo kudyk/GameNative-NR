@@ -381,7 +381,7 @@ public class WinHandler {
             this.socket.send(this.sendPacket);
             return true;
         } catch (IOException e) {
-            Log.w(TAG, "WinHandler send failed (code " + this.sendData.get(0) + ")", e);
+            Timber.tag(TAG).w(e, "WinHandler send failed (code " + this.sendData.get(0) + ")");
             return false;
         }
     }
@@ -451,7 +451,7 @@ public class WinHandler {
             if (!sent && (onGetProcessInfoListener = this.onGetProcessInfoListener) != null) {
                 onGetProcessInfoListener.onGetProcessInfo(0, 0, null);
             }
-            Log.d(TAG, "WinHandler listProcesses " + (sent ? "sent" : "not sent"));
+            Timber.tag(TAG).d("WinHandler listProcesses " + (sent ? "sent" : "not sent"));
         });
     }
 
@@ -568,7 +568,7 @@ public class WinHandler {
             }
             synchronized (this.actions) {
                 if (!this.initReceived && this.running) {
-                    Log.w(TAG, "WinHandler INIT not received within " + INIT_TIMEOUT_MS + " ms; sending anyway");
+                    Timber.tag(TAG).w("WinHandler INIT not received within " + INIT_TIMEOUT_MS + " ms; sending anyway");
                     this.initReceived = true;
                     this.actions.notify();
                 }
@@ -658,7 +658,7 @@ public class WinHandler {
         ExternalController externalController;
         switch (requestCode) {
             case RequestCodes.INIT:
-                Log.i(TAG, "WinHandler INIT received from port " + port);
+                Timber.tag(TAG).i("WinHandler INIT received from port " + port);
                 this.initReceived = true;
                 synchronized (this.actions) {
                     this.actions.notify();
@@ -875,7 +875,7 @@ public class WinHandler {
             }
         }
         refreshControllerMappings();
-        Log.i(TAG, "WinHandler start: localhost=" + this.localhost);
+        Timber.tag(TAG).i("WinHandler start: localhost=" + this.localhost);
         this.running = true;
         activeInstance = this;
         startSendThread();
@@ -884,9 +884,9 @@ public class WinHandler {
             this.socket = datagramSocket;
             datagramSocket.setReuseAddress(true);
             this.socket.bind(new InetSocketAddress((InetAddress) null, SERVER_PORT));
-            Log.i(TAG, "WinHandler bound to " + this.socket.getLocalSocketAddress());
+            Timber.tag(TAG).i("WinHandler bound to " + this.socket.getLocalSocketAddress());
         } catch (IOException e) {
-            Log.e(TAG, "WinHandler bind failed", e);
+            Timber.tag(TAG).e(e, "WinHandler bind failed");
             DatagramSocket failed = this.socket;
             this.socket = null;
             if (failed != null) failed.close();
@@ -902,7 +902,7 @@ public class WinHandler {
                     }
                 }
             } catch (IOException e) {
-                if (this.running) Log.e(TAG, "WinHandler receive loop ended", e);
+                if (this.running) Timber.tag(TAG).e(e, "WinHandler receive loop ended");
             }
         });
         startRumblePoller();

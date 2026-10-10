@@ -630,7 +630,7 @@ public class ControllerManager {
                 if (!reservedSlots[slot] && slotAssignments.get(slot) == null) { target = slot; break; }
             }
             if (target < 0) {
-                Log.w(TAG, "Player 1 is taken and cannot be freed; virtual controller stays unreserved");
+                Timber.tag(TAG).w("Player 1 is taken and cannot be freed; virtual controller stays unreserved");
                 return -1;
             }
             slotAssignments.remove(0);
@@ -639,13 +639,13 @@ public class ControllerManager {
             enabledSlots[target] = true;
             displacedIdentifier = occupant;
             displacedToSlot = target;
-            Log.i(TAG, "Moved " + occupant + " to Player " + (target + 1) + " for a virtual controller");
+            Timber.tag(TAG).i("Moved " + occupant + " to Player " + (target + 1) + " for a virtual controller");
         }
         reservedSlotWasEnabled = enabledSlots[0];
         reservedSlots[0] = true;
         enabledSlots[0] = true;
         notifySlotsChanged();
-        Log.i(TAG, "Reserved Player 1 for a virtual controller");
+        Timber.tag(TAG).i("Reserved Player 1 for a virtual controller");
         return 0;
     }
 
@@ -669,14 +669,14 @@ public class ControllerManager {
             }
             slotAssignments.put(slot, displacedIdentifier);
             enabledSlots[displacedToSlot] = displacedToSlotWasEnabled;
-            Log.i(TAG, "Restored " + displacedIdentifier + " to Player " + (slot + 1));
+            Timber.tag(TAG).i("Restored " + displacedIdentifier + " to Player " + (slot + 1));
             displacedIdentifier = null;
             displacedToSlot = -1;
         } else {
             markSlotRecentlyFreed(slot);
         }
         notifySlotsChanged();
-        Log.i(TAG, "Released virtual-controller reservation on Player " + (slot + 1));
+        Timber.tag(TAG).i("Released virtual-controller reservation on Player " + (slot + 1));
     }
 
     private int getPreferredFreeSlot(String deviceIdentifier) {
